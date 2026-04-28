@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>영화 상세</title>
+</head>
+<body>
+  <h1 th:text="${movie.title}">영화 제목</h3>
+  <p th:text="${movie.description}"></p>
+  <img th:src="${movie.imageURL}" alt="포스터"/>
+  <a href="/my_page">좌석/알림 설정</a>
+</body>
+</html>

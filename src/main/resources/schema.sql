@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS movies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description VARCHAR(500),
+    image_url VARCHAR(500)
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(20) NOT NULL,
+    movie_title VARCHAR(255) NOT NULL,
+    remaining_seats INT DEFAULT 1
+);

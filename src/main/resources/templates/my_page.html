@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>내 알림 설정</title>
+</head>
+<body>
+  <h1>명당 자리 알림 설정</h1>
+
+  <form th:action="@{/alert/save}" method="post" th:object="${newAlert}">
+    <label>전화번호:
+      <input type="text" th:field="*{userPhone}" placeholder="예: 010-1234-5678"/>
+    </label><br/>
+    <label>영화 제목:
+      <input type="text" th:field="*{movieTitle}"/>
+    </label><br/>
+    <label>남은 좌석 수(기준):
+      <input type="number" th:field="*{remainingSeats}" value="1"/>
+    </label><br/>
+    <button type="submit">알림 설정하기</button>
+  </form>
+
+  <hr/>
+  <h2>현재 알림 목록</h2>
+  <ul th:each="alert : ${alerts}">
+    <li>
+      [[${alert.movieTitle}]] – 남은 좌석: [[${alert.remainingSeats}]]개, 전화: [[${alert.userPhone}]]
+    </li>
+  </ul>
+
+  <a href="/">메인으로</a>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>MovieFlow</title>
+  <meta charset="UTF-8">
+  <link href="/css/main.css" rel="stylesheet">
+</head>
+<body>
+  <h1>MovieFlow 티켓 예약</h1>
+  <ul>
+    <li th:each="movie : ${movies}">
+      <b th:text="${movie.title}"></b>
+      <span th:text="${movie.description}"></span>
+      <a th:href="@{/movie_detail/} + ${movie.id}">상세보기</a>
+    </li>
+  </ul>
+  <a href="/my_page">내 알림 페이지</a>
+</body>
+</html>
