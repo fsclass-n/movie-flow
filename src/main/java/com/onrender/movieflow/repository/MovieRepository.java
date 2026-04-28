@@ -20,7 +20,7 @@ public class MovieRepository {
     private final RowMapper<MovieDto> rowMapper = new RowMapper<>() {
         @Override
         public MovieDto mapRow(ResultSet rs, int rowNum) throws SQLException {
-            MovieDto dto = new Movie podemos();
+            MovieDto dto = new MovieDto();
             dto.setId(rs.getLong("id"));
             dto.setTitle(rs.getString("title"));
             dto.setDescription(rs.getString("description"));
