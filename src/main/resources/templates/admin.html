@@ -37,37 +37,23 @@
         </div>
     </div>
 </nav>
-    <div class="container my-5">
-    <div class="row">
-        <div class="col-md-4 mb-4">
+
+<main class="container my-5">
+    <div class="row mb-4">
+        <div class="col-md-4" th:each="stat : ${stats}">
             <div class="card-custom p-4 text-center">
-                <h6 class="text-secondary">활성 봇 수</h6>
-                <div class="display-5 fw-bold text-success">12</div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card-custom p-4 text-center">
-                <h6 class="text-secondary">오늘 알림 발송</h6>
-                <div class="display-5 fw-bold text-info">142</div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card-custom p-4 text-center">
-                <h6 class="text-secondary">시스템 부하</h6>
-                <div class="display-5 fw-bold text-warning">24%</div>
+                <h6 class="text-secondary" th:text="${stat.label}">활성 봇 수</h6>
+                <div class="display-5 fw-bold" th:classappend="${stat.colorClass}" th:text="${stat.value}">0</div>
             </div>
         </div>
     </div>
     <div class="card-custom p-4">
         <h5 class="fw-bold mb-3"><i class="fa-solid fa-terminal me-2"></i>RPA Execution Log</h5>
         <div class="bg-black p-3 rounded font-monospace small" style="height: 300px; overflow-y: auto; color: #00ff00;">
-            <div>[2024-06-20 14:00:01] INFO: Crawler started for CGV...</div>
-            <div>[2024-06-20 14:00:05] INFO: InsideOut2 seat data updated.</div>
-            <div class="text-white">[2024-06-20 14:00:10] ALERT: Good seat found! Sending Mail to user1...</div>
-            <div class="text-secondary">...</div>
+            <div th:each="log : ${logs}" th:text="${log.formattedMessage}">[로그 내용]</div>
         </div>
     </div>
-</div>
+</main>
 
 <footer>
     <div class="container">

@@ -1,118 +1,29 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Flow | 실시간 명당 알리미</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --primary-red: #e11d48;
-            --accent-green: #10b981;
-            --text-main: #f8fafc;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: 'Pretendard', sans-serif;
-        }
-
-        /* Navbar Custom */
-        .navbar {
-            background-color: rgba(15, 23, 42, 0.9);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid #334155;
-        }
-
-        /* Hero Section */
-        .hero-section {
-            padding: 60px 0;
-            background: linear-gradient(to bottom, #1e293b, #0f172a);
-        }
-
-        /* Movie Card */
-        .movie-card {
-            background-color: var(--card-bg);
-            border: 1px solid #334155;
-            border-radius: 16px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            overflow: hidden;
-            margin-bottom: 24px;
-        }
-
-        .movie-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-
-        .status-badge {
-            font-size: 0.75rem;
-            padding: 4px 12px;
-            border-radius: 20px;
-        }
-
-        .good-seat-count {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--primary-red);
-        }
-
-        .rpa-status-dot {
-            width: 10px;
-            height: 10px;
-            background-color: var(--accent-green);
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 5px;
-            box-shadow: 0 0 10px var(--accent-green);
-            animation: blink 1.5s infinite;
-        }
-
-        @keyframes blink {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
-        }
-
-        .btn-alert {
-            background-color: var(--primary-red);
-            border: none;
-            font-weight: 600;
-        }
-
-        .btn-alert:hover {
-            background-color: #be123c;
-        }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
     <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="index.html">
+        <a class="navbar-brand fw-bold d-flex align-items-center" th:href="@{/}">
             <i class="fa-solid fa-film text-danger me-2"></i>MOVIE FLOW
         </a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto align-items-center">
                 <li class="nav-item me-4">
                     <span class="small text-secondary"><span class="rpa-status-dot"></span>RPA Engine Active</span>
                 </li>
                 <li class="nav-item me-3">
-                    <a class="nav-link nav-link-custom" href="admin.html">
-                        <i class="fa-solid fa-user-gear me-1"></i>관리자
-                    </a>
+                    <a class="nav-link" th:href="@{/admin}"><i class="fa-solid fa-user-gear me-1"></i>관리자</a>
                 </li>
                 <li class="nav-item">
-                    <a href="mypage.html" class="btn btn-outline-light btn-sm px-3">마이페이지</a>
+                    <a th:href="@{/mypage}" class="btn btn-outline-light btn-sm px-3">마이페이지</a>
                 </li>
             </ul>
         </div>
@@ -128,113 +39,28 @@
 
 <main class="container my-5">
     <div class="row">
-        <div class="col-md-4">
-            <div class="movie-card p-4">
+        <div class="col-md-4" th:each="movie : ${movies}">
+            <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge bg-secondary status-badge">CGV 강남</span>
-                    <span class="text-secondary small">14:30 상영</span>
+                    <span class="badge bg-secondary" th:text="${movie.theaterName}">영화관</span>
+                    <span class="text-secondary small" th:text="${movie.startTime + ' 상영'}">시간</span>
                 </div>
-                <h3 class="h5 fw-bold mb-4">인사이드 아웃 2</h3>
+                <h3 class="h5 fw-bold mb-4" th:text="${movie.title}">영화 제목</h3>
                 <div class="text-center mb-4">
                     <p class="mb-1 text-secondary small">명당 잔여석</p>
-                    <div class="good-seat-count">8<span class="h5 text-secondary ms-1">석</span></div>
+                    <div class="good-seat-count" th:classappend="${movie.goodSeats == 0} ? 'text-secondary' : ''">
+                        <span th:text="${movie.goodSeats}">0</span><span class="h5 ms-1">석</span>
+                    </div>
                 </div>
-                <button class="btn btn-alert w-100 py-2 text-white" onclick="showAlertModal('인사이드 아웃 2')">
-                    <i class="fa-solid fa-bell me-2"></i>실시간 알림 신청
-                </button>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="movie-card p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge bg-secondary status-badge">롯데시네마 건대</span>
-                    <span class="text-secondary small">15:00 상영</span>
-                </div>
-                <h3 class="h5 fw-bold mb-4">퓨리오사: 매드맥스 사가</h3>
-                <div class="text-center mb-4">
-                    <p class="mb-1 text-secondary small">명당 잔여석</p>
-                    <div class="good-seat-count">3<span class="h5 text-secondary ms-1">석</span></div>
-                </div>
-                <button class="btn btn-alert w-100 py-2 text-white">
-                    <i class="fa-solid fa-bell me-2"></i>실시간 알림 신청
-                </button>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="movie-card p-4 opacity-75">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge bg-secondary status-badge">메가박스 코엑스</span>
-                    <span class="text-secondary small">18:20 상영</span>
-                </div>
-                <h3 class="h5 fw-bold mb-4">원더랜드</h3>
-                <div class="text-center mb-4">
-                    <p class="mb-1 text-secondary small">명당 잔여석</p>
-                    <div class="good-seat-count text-secondary">0<span class="h5 ms-1">석</span></div>
-                </div>
-                <button class="btn btn-secondary w-100 py-2" disabled>
-                    취소표 대기 중...
-                </button>
+                <a th:if="${movie.goodSeats > 0}" th:href="@{/movie/detail/{id}(id=${movie.id})}" class="btn btn-alert w-100 py-2">상세보기 및 알림 신청</a>
+                <button th:unless="${movie.goodSeats > 0}" class="btn btn-secondary w-100 py-2" disabled>취소표 대기 중...</button>
             </div>
         </div>
     </div>
 </main>
 
-<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title" id="modalTitle">알림 설정</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>명당 자리가 확보되면 등록된 이메일로 즉시 알림을 보내드립니다.</p>
-                <div class="mb-3">
-                    <label class="form-label text-secondary small">알림 받을 이메일</label>
-                    <input type="email" class="form-control bg-transparent text-white border-secondary" value="user@example.com">
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-alert text-white" onclick="confirmAlert()">신청하기</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<footer>
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                <h5 class="fw-bold text-white mb-2">MOVIE FLOW</h5>
-                <p class="small mb-0">RPA 중심의 영화 예매 자동화 및 효율화 세미 프로젝트</p>
-                <p class="small text-secondary">Created by Team Java Fullstack (4인)</p>
-            </div>
-            <div class="col-md-6 text-center text-md-end">
-                <div class="mb-2">
-                    <a href="#" class="text-secondary me-3"><i class="fa-brands fa-github h5"></i></a>
-                    <a href="#" class="text-secondary"><i class="fa-solid fa-envelope h5"></i></a>
-                </div>
-                <p class="small mb-0">&copy; 2026 Movie Flow RPA Project. All rights reserved.</p>
-            </div>
-        </div>
-    </div>
-</footer>
-
+<footer th:replace="~{fragments/footer :: common-footer}"></footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    const modal = new bootstrap.Modal(document.getElementById('alertModal'));
-    
-    function showAlertModal(title) {
-        document.getElementById('modalTitle').innerText = title + ' 명당 알림';
-        modal.show();
-    }
-
-    function confirmAlert() {
-        alert('알림 신청이 완료되었습니다! 명당 자리가 나오면 메일로 알려드릴게요.');
-        modal.hide();
-    }
-</script>
+<script th:src="@{/js/main.js}"></script>
 </body>
 </html>

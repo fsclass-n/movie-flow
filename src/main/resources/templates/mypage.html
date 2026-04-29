@@ -38,7 +38,7 @@
     </div>
 </nav>
 
-    <div class="container my-5">
+<main class="container my-5">
     <h2 class="fw-bold mb-4">내 알림 관리</h2>
     <div class="card-custom overflow-hidden">
         <table class="table table-dark table-hover mb-0">
@@ -51,22 +51,25 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>인사이드 아웃 2</td>
-                    <td>CGV 강남 | 14:30</td>
-                    <td><span class="badge bg-success">감시 중</span></td>
-                    <td><button class="btn btn-outline-danger btn-sm">취소</button></td>
-                </tr>
-                <tr>
-                    <td>퓨리오사</td>
-                    <td>롯데시네마 건대 | 15:00</td>
-                    <td><span class="badge bg-secondary">전송 완료</span></td>
-                    <td><button class="btn btn-outline-light btn-sm">기록 삭제</button></td>
+                <tr th:each="alert : ${alerts}">
+                    <td th:text="${alert.movieTitle}">인사이드 아웃 2</td>
+                    <td th:text="${alert.theaterName + ' | ' + alert.startTime}">정보</td>
+                    <td>
+                        <span class="badge" 
+                              th:classappend="${alert.status == 'WATCHING' ? 'bg-success' : 'bg-secondary'}"
+                              th:text="${alert.status == 'WATCHING' ? '감시 중' : '전송 완료'}"></span>
+                    </td>
+                    <td>
+                        <form th:action="@{/alert/cancel}" method="post">
+                            <input type="hidden" name="alertId" th:value="${alert.id}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">취소</button>
+                        </form>
+                    </td>
                 </tr>
             </tbody>
         </table>
     </div>
-</div>
+</main>
 
 <footer>
     <div class="container">
