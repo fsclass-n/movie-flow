@@ -18,7 +18,7 @@ import java.util.Map;
 public class RpaService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper; // JSON 파싱용
+    private final ObjectMapper objectMapper;
 
     public RpaService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
@@ -26,15 +26,19 @@ public class RpaService {
     }
 
     public void runRpaScript() {
-        // OS 환경에 따라 "python" 또는 "python3"로 수정이 필요할 수 있습니다.
         String pythonCommand = "python"; 
         String scriptPath = "rpa/scripts/theater_crawler.py";
 
         try {
             log.info("RPA 크롤링 스크립트 실행 시작...");
-            Process process = new ProcessBuilder(pythonCommand, scriptPath).start();
+            
+            ProcessBuilder pb = new ProcessBuilder(pythonCommand, scriptPath);
+            Map<String, String> env = pb.environment();
+            // 파이썬 출력 인코딩 강제 설정 (한글 깨짐 방지)
+            env.put("PYTHONIOENCODING", "UTF-8"); 
 
-            // 1. 파이썬의 표준 출력(print) 읽기
+            Process process = pb.start();
+
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -48,42 +52,62 @@ public class RpaService {
             log.info("RPA 스크립트 종료 코드: {}", exitCode);
 
             if (exitCode == 0 && output.length() > 0) {
-                // 2. 파이썬이 보낸 JSON 데이터를 객체로 변환
                 List<Map<String, Object>> results = objectMapper.readValue(
                         output.toString(), 
                         new TypeReference<List<Map<String, Object>>>() {}
                 );
-
-                // 3. DB 업데이트 로직 수행
                 updateMovieSeats(results);
             } else {
-                log.error("RPA 실행 결과가 없거나 에러가 발생했습니다.");
+                // [수정] 파라미터 2개 전달 (메시지, 레벨)
+                saveLogToDb("RPA 실행 결과가 없거나 에러 발생. 코드: " + exitCode, "ERROR");
             }
 
         } catch (IOException | InterruptedException e) {
+            // [수정] 파라미터 2개 전달 (메시지, 레벨)
+            saveLogToDb("RPA 예외 발생: " + e.getMessage(), "ERROR");
             log.error("RPA 실행 중 예외 발생", e);
             Thread.currentThread().interrupt();
         }
     }
 
-    /**
-     * 크롤링 결과를 순회하며 movies 테이블의 good_seats 컬럼을 업데이트합니다.
-     */
     private void updateMovieSeats(List<Map<String, Object>> results) {
-        String sql = "UPDATE movies SET good_seats = ? WHERE title = ? AND theater_name = ?";
+        String updateSql = "UPDATE movies SET good_seats = ? WHERE title = ? AND theater_name = ?";
 
         for (Map<String, Object> data : results) {
             String title = (String) data.get("title");
             String theaterName = (String) data.get("theater_name");
             Integer goodSeats = (Integer) data.get("good_seats");
 
-            int updatedRows = jdbcTemplate.update(sql, goodSeats, title, theaterName);
+            int updatedRows = jdbcTemplate.update(updateSql, goodSeats, title, theaterName);
             
+            String logMsg;
+            String logLevel;
+
             if (updatedRows > 0) {
-                log.info("DB 업데이트 성공: {} - {} ({}석)", theaterName, title, goodSeats);
+                logMsg = String.format("업데이트 성공: %s - %s (%d석)", theaterName, title, goodSeats);
+                logLevel = "INFO";
+                log.info(logMsg);
             } else {
-                log.warn("업데이트 대상 없음: {} - {}", theaterName, title);
+                logMsg = String.format("업데이트 대상 없음: %s - %s", theaterName, title);
+                logLevel = "WARN";
+                log.warn(logMsg);
             }
+            
+            // [수정] 로그 저장 시 메시지와 레벨을 함께 전달
+            saveLogToDb(logMsg, logLevel);
+        }
+    }
+
+    /**
+     * DB의 rpa_logs 테이블에 로그를 저장합니다.
+     * log_level 컬럼의 'no default value' 에러를 방지하기 위해 레벨을 함께 저장합니다.
+     */
+    private void saveLogToDb(String message, String level) {
+        try {
+            String sql = "INSERT INTO rpa_logs (message, log_level) VALUES (?, ?)";
+            jdbcTemplate.update(sql, message, level);
+        } catch (Exception e) {
+            log.error("로그 DB 저장 실패 (메시지: {}): {}", message, e.getMessage());
         }
     }
 }

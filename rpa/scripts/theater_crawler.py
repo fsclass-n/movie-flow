@@ -2,10 +2,16 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from seat_logic import calculate_good_seats 
-import time
+import time, sys, io
 import json # 결과를 구조화해서 출력하기 위해 추가
 
+# 표준 출력을 UTF-8로 설정 (윈도우 한글 깨짐 방지 핵심)
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
+
+
 def crawl_theater_data():
+    
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")

@@ -10,33 +10,7 @@
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-    <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="index.html">
-            <i class="fa-solid fa-film text-danger me-2"></i>MOVIE FLOW
-        </a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-center">
-                <li class="nav-item me-4">
-                    <span class="small text-secondary"><span class="rpa-status-dot"></span>RPA Engine Active</span>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link nav-link-custom" href="admin.html">
-                        <i class="fa-solid fa-user-gear me-1"></i>관리자
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="mypage.html" class="btn btn-outline-light btn-sm px-3">마이페이지</a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+<div th:replace="~{fragments/header :: common-header}"></div>
 
 <main class="container my-5">
     <h2 class="fw-bold mb-4">내 알림 관리</h2>
@@ -71,23 +45,6 @@
     </div>
 </main>
 
-<footer>
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                <h5 class="fw-bold text-white mb-2">MOVIE FLOW</h5>
-                <p class="small mb-0">RPA 중심의 영화 예매 자동화 및 효율화 세미 프로젝트</p>
-                <p class="small text-secondary">Created by Team Java Fullstack (4인)</p>
-            </div>
-            <div class="col-md-6 text-center text-md-end">
-                <div class="mb-2">
-                    <a href="#" class="text-secondary me-3"><i class="fa-brands fa-github h5"></i></a>
-                    <a href="#" class="text-secondary"><i class="fa-solid fa-envelope h5"></i></a>
-                </div>
-                <p class="small mb-0">&copy; 2026 Movie Flow RPA Project. All rights reserved.</p>
-            </div>
-        </div>
-    </div>
-</footer>
+<div th:replace="~{fragments/footer :: common-footer}"></div>
 </body>
 </html>

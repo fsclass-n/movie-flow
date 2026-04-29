@@ -9,26 +9,7 @@
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-    <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center" th:href="@{/}">
-            <i class="fa-solid fa-film text-danger me-2"></i>MOVIE FLOW
-        </a>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-center">
-                <li class="nav-item me-4">
-                    <span class="small text-secondary"><span class="rpa-status-dot"></span>RPA Engine Active</span>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" th:href="@{/admin}"><i class="fa-solid fa-user-gear me-1"></i>관리자</a>
-                </li>
-                <li class="nav-item">
-                    <a th:href="@{/mypage}" class="btn btn-outline-light btn-sm px-3">마이페이지</a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+<div th:replace="~{fragments/header :: common-header}"></div>
 
 <section class="hero-section text-center">
     <div class="container">
@@ -39,21 +20,41 @@
 
 <main class="container my-5">
     <div class="row">
-        <div class="col-md-4" th:each="movie : ${movies}">
-            <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''">
+        <div th:if="${#lists.isEmpty(movies)}" class="text-center py-5">
+            <p class="text-secondary">현재 등록된 상영 정보가 없습니다.</p>
+        </div>
+
+        <div class="col-md-4 mb-4" th:each="movie : ${movies}">
+            <div class="movie-card p-4 h-100" 
+                 th:classappend="${movie.goodSeats > 0} ? 'border-danger shadow' : 'opacity-50'">
+                
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge bg-secondary" th:text="${movie.theaterName}">영화관</span>
+                    <span class="badge" 
+                          th:classappend="${#strings.contains(movie.theaterName, 'CGV')} ? 'bg-danger' : 
+                                         (${#strings.contains(movie.theaterName, '메가박스')} ? 'bg-primary' : 'bg-secondary')"
+                          th:text="${movie.theaterName}">영화관</span>
                     <span class="text-secondary small" th:text="${movie.startTime + ' 상영'}">시간</span>
                 </div>
+
                 <h3 class="h5 fw-bold mb-4" th:text="${movie.title}">영화 제목</h3>
+                
                 <div class="text-center mb-4">
                     <p class="mb-1 text-secondary small">명당 잔여석</p>
-                    <div class="good-seat-count" th:classappend="${movie.goodSeats == 0} ? 'text-secondary' : ''">
+                    <div class="good-seat-count" 
+                         th:classappend="${movie.goodSeats > 0} ? 'text-danger fw-bold' : 'text-secondary'">
                         <span th:text="${movie.goodSeats}">0</span><span class="h5 ms-1">석</span>
                     </div>
                 </div>
-                <a th:if="${movie.goodSeats > 0}" th:href="@{/movie/detail/{id}(id=${movie.id})}" class="btn btn-alert w-100 py-2">상세보기 및 알림 신청</a>
-                <button th:unless="${movie.goodSeats > 0}" class="btn btn-secondary w-100 py-2" disabled>취소표 대기 중...</button>
+
+                <div class="mt-auto">
+                    <a th:if="${movie.goodSeats > 0}" 
+                       th:href="@{/movie/detail/{id}(id=${movie.id})}" 
+                       class="btn btn-danger w-100 py-2 shadow-sm">상세보기 및 알림 신청</a>
+                    
+                    <button th:unless="${movie.goodSeats > 0}" 
+                            class="btn btn-outline-secondary w-100 py-2" 
+                            disabled>취소표 대기 중...</button>
+                </div>
             </div>
         </div>
     </div>

@@ -1,77 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <title>관리자 대시보드 - MOVIE FLOW</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <style>
+        /* 로그 레벨별 색상 정의 */
+        .log-INFO { color: #00ff00; }  /* 초록 */
+        .log-WARN { color: #ffcc00; }  /* 노랑 */
+        .log-ERROR { color: #ff4444; } /* 빨강 */
+    </style>
 </head>
 <body>
     
-<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-    <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="index.html">
-            <i class="fa-solid fa-film text-danger me-2"></i>MOVIE FLOW
-        </a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+    <div th:replace="~{fragments/header :: common-header}"></div>
 
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-center">
-                <li class="nav-item me-4">
-                    <span class="small text-secondary"><span class="rpa-status-dot"></span>RPA Engine Active</span>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link nav-link-custom" href="admin.html">
-                        <i class="fa-solid fa-user-gear me-1"></i>관리자
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="mypage.html" class="btn btn-outline-light btn-sm px-3">마이페이지</a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<main class="container my-5">
-    <div class="row mb-4">
-        <div class="col-md-4" th:each="stat : ${stats}">
-            <div class="card-custom p-4 text-center">
-                <h6 class="text-secondary" th:text="${stat.label}">활성 봇 수</h6>
-                <div class="display-5 fw-bold" th:classappend="${stat.colorClass}" th:text="${stat.value}">0</div>
-            </div>
-        </div>
-    </div>
-    <div class="card-custom p-4">
-        <h5 class="fw-bold mb-3"><i class="fa-solid fa-terminal me-2"></i>RPA Execution Log</h5>
-        <div class="bg-black p-3 rounded font-monospace small" style="height: 300px; overflow-y: auto; color: #00ff00;">
-            <div th:each="log : ${logs}" th:text="${log.formattedMessage}">[로그 내용]</div>
-        </div>
-    </div>
-</main>
-
-<footer>
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                <h5 class="fw-bold text-white mb-2">MOVIE FLOW</h5>
-                <p class="small mb-0">RPA 중심의 영화 예매 자동화 및 효율화 세미 프로젝트</p>
-                <p class="small text-secondary">Created by Team Java Fullstack (4인)</p>
-            </div>
-            <div class="col-md-6 text-center text-md-end">
-                <div class="mb-2">
-                    <a href="#" class="text-secondary me-3"><i class="fa-brands fa-github h5"></i></a>
-                    <a href="#" class="text-secondary"><i class="fa-solid fa-envelope h5"></i></a>
+    <main class="container my-5">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card-custom p-4 text-center">
+                    <h6 class="text-secondary">활성 봇 수</h6>
+                    <div class="display-5 fw-bold text-primary" th:text="${activeBots}">0</div>
                 </div>
-                <p class="small mb-0">&copy; 2026 Movie Flow RPA Project. All rights reserved.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom p-4 text-center">
+                    <h6 class="text-secondary">알림 전송 수</h6>
+                    <div class="display-5 fw-bold text-success" th:text="${sentCount}">0</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom p-4 text-center">
+                    <h6 class="text-secondary">시스템 상태</h6>
+                    <div class="display-5 fw-bold text-info">Active</div>
+                </div>
             </div>
         </div>
-    </div>
-</footer>
+
+        <div class="card-custom p-4">
+            <h5 class="fw-bold mb-3">
+                <i class="fa-solid fa-terminal me-2"></i>RPA Execution Log
+                <small class="text-secondary ms-2" style="font-size: 0.7em;">(최신 10개 내역)</small>
+            </h5>
+            
+            <div class="bg-black p-3 rounded font-monospace small" style="height: 400px; overflow-y: auto;">
+                <div th:each="log : ${logs}" class="mb-1">
+                    <span th:if="${log instanceof T(java.lang.String)}" th:text="${log}"></span>
+                    
+                    <th:block th:if="${log instanceof T(java.util.Map)}">
+                        <span th:class="'log-' + ${log.log_level}" th:text="'[' + ${log.log_level} + ']'"></span>
+                        <span class="text-white-50" th:text="${#calendars.format(#calendars.createNow(), 'HH:mm:ss')}"></span>
+                        <span class="ms-2 text-light" th:text="${log.message}"></span>
+                    </th:block>
+                </div>
+                
+                <div th:if="${#lists.isEmpty(logs)}" class="text-secondary text-center mt-5">
+                    표시할 로그 데이터가 없습니다.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: common-footer}"></div>
+
 </body>
 </html>
