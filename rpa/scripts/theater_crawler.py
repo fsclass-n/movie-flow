@@ -1,34 +1,68 @@
+# rpa/scripts/theater_crawler.py
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from seat_logic import calculate_good_seats # 명당 로직 불러오기
+import mysql.connector # DB 업데이트용
 import time
 
-def main():
+def get_db_connection():
+    return mysql.connector.connect(
+        host="your-tidb-host", # 백엔드와 동일한 설정
+        user="your-username",
+        password="your-password",
+        database="movieflow",
+        port=4000
+    )
+
+def crawl_theater_data():
     opts = Options()
     opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-
     driver = webdriver.Chrome(options=opts)
+    
+    # 크롤링할 대상 정의 (프론트 결과와 일치)
+    theaters = [
+        {"name": "CGV 강남", "url": "https://www.cgv.co.kr/..."},
+        {"name": "롯데시네마 건대", "url": "https://www.lottecinema.co.kr/..."},
+        {"name": "메가박스 코엑스", "url": "https://www.megabox.co.kr/..."}
+    ]
+
+    results = []
+    
     try:
-        driver.get("https://example-theater-site.com")  # 대표 영화관 사이트 (실제로는 API/크롤링 허용 사이트 사용)
-        time.sleep(3)
+        for theater in theaters:
+            driver.get(theater["url"])
+            time.sleep(2) # 로딩 대기
+            
+            # [가정] 페이지에서 영화 제목과 모든 좌석 데이터를 가져옴
+            # 실제 구현 시 각 영화관 사이트의 Selector에 맞게 수정 필요
+            title = "인사이드 아웃 2" # 예시
+            all_seats = [("C", 7), ("D", 8), ("A", 1)] # 예시 좌석 리스트
+            
+            # seat_logic을 사용하여 명당 잔여석 계산
+            good_seats_count = calculate_good_seats(all_seats)
+            
+            results.append({
+                "theater_name": theater["name"],
+                "title": title,
+                "good_seats": good_seats_count
+            })
 
-        # 예: 상영시간 및 좌석 정보가 있는 테이블
-        titles = driver.find_elements(By.CSS_SELECTOR, "div.movie-title")
-        times = driver.find_elements(By.CSS_SELECTOR, "div.showtime")
-
-        print("=== 상영정보 수집 결과 ===")
-        for title, tm in zip(titles, times):
-            print(f"{title.text} | {tm.text}")
-
-        # 결과를 파일로 적어 두면 Java 쪽에서 JSON/파일로 읽어들여도 됨
-        with open("rpa/schedule_output.txt", "w", encoding="utf-8") as f:
-            for title, tm in zip(titles, times):
-                f.write(f"{title.text} | {tm.text}\n")
+        # DB 업데이트 (백엔드 화면에 즉시 반영)
+        update_database(results)
 
     finally:
         driver.quit()
 
+def update_database(results):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    for res in results:
+        sql = "UPDATE movies SET good_seats = ? WHERE title = ? AND theater_name = ?"
+        cursor.execute(sql, (res["good_seats"], res["title"], res["theater_name"]))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("RPA: DB 업데이트 완료")
+
 if __name__ == "__main__":
-    main()
+    crawl_theater_data()
