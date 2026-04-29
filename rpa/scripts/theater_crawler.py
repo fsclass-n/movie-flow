@@ -1,25 +1,18 @@
 # rpa/scripts/theater_crawler.py
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from seat_logic import calculate_good_seats # 명당 로직 불러오기
-import mysql.connector # DB 업데이트용
+from seat_logic import calculate_good_seats 
 import time
-
-def get_db_connection():
-    return mysql.connector.connect(
-        host="your-tidb-host", # 백엔드와 동일한 설정
-        user="your-username",
-        password="your-password",
-        database="movieflow",
-        port=4000
-    )
+import json # 결과를 구조화해서 출력하기 위해 추가
 
 def crawl_theater_data():
     opts = Options()
     opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    
     driver = webdriver.Chrome(options=opts)
     
-    # 크롤링할 대상 정의 (프론트 결과와 일치)
     theaters = [
         {"name": "CGV 강남", "url": "https://www.cgv.co.kr/..."},
         {"name": "롯데시네마 건대", "url": "https://www.lottecinema.co.kr/..."},
@@ -30,13 +23,14 @@ def crawl_theater_data():
     
     try:
         for theater in theaters:
-            driver.get(theater["url"])
-            time.sleep(2) # 로딩 대기
+            # 실제 운영 시 URL 접속 및 데이터 파싱 로직이 들어갑니다.
+            # driver.get(theater["url"])
+            # time.sleep(2)
             
-            # [가정] 페이지에서 영화 제목과 모든 좌석 데이터를 가져옴
-            # 실제 구현 시 각 영화관 사이트의 Selector에 맞게 수정 필요
-            title = "인사이드 아웃 2" # 예시
-            all_seats = [("C", 7), ("D", 8), ("A", 1)] # 예시 좌석 리스트
+            # [테스트 가상 데이터]
+            title = "인사이드 아웃 2" 
+            # 실제로는 드라이버가 긁어온 좌석 리스트가 들어감
+            all_seats = [("C", 7), ("D", 8), ("E", 10), ("A", 1)] 
             
             # seat_logic을 사용하여 명당 잔여석 계산
             good_seats_count = calculate_good_seats(all_seats)
@@ -47,22 +41,15 @@ def crawl_theater_data():
                 "good_seats": good_seats_count
             })
 
-        # DB 업데이트 (백엔드 화면에 즉시 반영)
-        update_database(results)
+        # DB에 직접 넣는 대신, 표준 출력(stdout)으로 JSON 데이터를 내보냄
+        # 자바의 BufferedReader가 이 값을 읽어갑니다.
+        print(json.dumps(results, ensure_ascii=False))
 
+    except Exception as e:
+        # 에러 발생 시 자바가 알 수 있도록 에러 메시지 출력
+        print(json.dumps({"error": str(e)}))
     finally:
         driver.quit()
-
-def update_database(results):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for res in results:
-        sql = "UPDATE movies SET good_seats = ? WHERE title = ? AND theater_name = ?"
-        cursor.execute(sql, (res["good_seats"], res["title"], res["theater_name"]))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print("RPA: DB 업데이트 완료")
 
 if __name__ == "__main__":
     crawl_theater_data()
