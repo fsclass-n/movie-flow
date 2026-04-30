@@ -1,5 +1,3 @@
-# rpa/scripts/seat_logic.py
-
 def is_premium_seat(row, seat_number):
     # 명당 조건: C~E행의 5~10번 좌석
     prime_rows = ["C", "D", "E"]

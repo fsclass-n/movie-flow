@@ -8,10 +8,24 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" th:href="@{/css/common.css}">
     <style>
-        /* 로그 레벨별 색상 정의 */
+        /* 기존 로그 레벨별 색상 유지 */
         .log-INFO { color: #00ff00; }  /* 초록 */
         .log-WARN { color: #ffcc00; }  /* 노랑 */
         .log-ERROR { color: #ff4444; } /* 빨강 */
+        
+        /* 시간 표시 스타일 추가 */
+        .log-timestamp { color: #888; font-size: 0.9em; margin-right: 8px; }
+        .log-message { color: #f8f9fa; margin-left: 8px; }
+        
+        /* 터미널 박스 가독성 보강 */
+        .terminal-window {
+            background-color: #000;
+            padding: 20px;
+            border-radius: 8px;
+            height: 450px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
     </style>
 </head>
 <body>
@@ -43,17 +57,31 @@
         <div class="card-custom p-4">
             <h5 class="fw-bold mb-3">
                 <i class="fa-solid fa-terminal me-2"></i>RPA Execution Log
-                <small class="text-secondary ms-2" style="font-size: 0.7em;">(최신 10개 내역)</small>
+                <small class="text-secondary ms-2" style="font-size: 0.7em;">(최신 15개 내역)</small>
             </h5>
             
-            <div class="bg-black p-3 rounded font-monospace small" style="height: 400px; overflow-y: auto;">
-                <div th:each="log : ${logs}" class="mb-1">
-                    <span th:if="${log instanceof T(java.lang.String)}" th:text="${log}"></span>
+            <div class="terminal-window font-monospace small">
+                <!-- iterStat을 사용하여 15개까지만 노출 제어 -->
+                <div th:each="log, iterStat : ${logs}" th:if="${iterStat.index < 15}" class="mb-2">
                     
+                    <!-- 1. 단순 문자열 로그일 경우 -->
+                    <th:block th:if="${log instanceof T(java.lang.String)}">
+                        <span class="log-timestamp" th:text="${#calendars.format(#calendars.createNow(), 'yyyy-MM-dd HH:mm:ss')}"></span>
+                        <span class="log-message" th:text="${log}"></span>
+                    </th:block>
+                    
+                    <!-- 2. Map 형태의 구조화된 로그일 경우 (권장) -->
                     <th:block th:if="${log instanceof T(java.util.Map)}">
+                        <!-- 날짜와 시간 표시 -->
+                        <span class="log-timestamp" 
+                              th:text="${log.timestamp != null ? log.timestamp : #calendars.format(#calendars.createNow(), 'yyyy-MM-dd HH:mm:ss')}">
+                        </span>
+                        
+                        <!-- 로그 레벨 [INFO, WARN, ERROR] -->
                         <span th:class="'log-' + ${log.log_level}" th:text="'[' + ${log.log_level} + ']'"></span>
-                        <span class="text-white-50" th:text="${#calendars.format(#calendars.createNow(), 'HH:mm:ss')}"></span>
-                        <span class="ms-2 text-light" th:text="${log.message}"></span>
+                        
+                        <!-- 실제 로그 메시지 -->
+                        <span class="log-message" th:text="${log.message}"></span>
                     </th:block>
                 </div>
                 

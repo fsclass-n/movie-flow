@@ -1,27 +1,26 @@
-# rpa/main.py
 import subprocess
 import sys
 import os
-import mysql.connector
 
-def log_to_db(message):
-    # 백엔드 관리자 페이지의 'RPA Engine Active' 로그를 위해 DB에 기록
-    try:
-        conn = mysql.connector.connect(host="...", user="...", password="...", database="movieflow")
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO rpa_logs (message) VALUES (%s)", (message,))
-        conn.commit()
-        conn.close()
-    except:
-        pass
-
-if __name__ == "__main__":
-    log_to_db("RPA 스크립트 실행 시작")
+def run_engine():
+    """
+    RPA 엔진 실행 메인 함수.
+    DB 연결 없이 표준 출력(stdout)을 통해 백엔드와 통신합니다.
+    """
+    # theater_crawler.py 경로 설정
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    script_path = os.path.join(current_dir, "scripts", "theater_crawler.py")
     
-    script_path = os.path.join(os.path.dirname(__file__), "scripts", "theater_crawler.py")
-    result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
+    # 크롤러 실행
+    # sys.executable을 사용하여 현재 가상환경의 파이썬을 그대로 사용합니다.
+    result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, encoding='utf-8')
     
     if result.returncode == 0:
-        log_to_db("RPA 크롤링 및 DB 업데이트 성공")
+        # 크롤러가 출력한 JSON 데이터를 그대로 다시 출력 (Java에서 읽음)
+        print(result.stdout)
     else:
-        log_to_db(f"RPA 에러 발생: {result.stderr}")
+        # 에러 발생 시 stderr 내용을 출력
+        print(f"Error: {result.stderr}")
+
+if __name__ == "__main__":
+    run_engine()
