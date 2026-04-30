@@ -11,8 +11,12 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item me-4">
-                        <span class="small text-secondary"><span class="rpa-status-dot"></span>RPA Engine Active</span>
+                    <!-- activeBots 데이터가 없어도(null) 돌아가도록 기본값을 false로 잡았습니다 -->
+                    <li class="nav-item me-4" th:with="isActive=${activeBots != null and activeBots > 0}">
+                        <span class="small text-secondary">
+                            <span id="rpaStatusDot" class="rpa-status-dot" th:classappend="${isActive} ? ' active' : ' inactive'"></span>
+                            <span id="rpaStatusText" th:text="${isActive} ? 'RPA Engine Active' : 'RPA Engine Inactive'"></span>
+                        </span>
                     </li>
                     <li class="nav-item me-3">
                         <a class="nav-link nav-link-custom" th:href="@{/admin}">
@@ -25,6 +29,42 @@
                 </ul>
             </div>
         </div>
+        <script>
+            (() => {
+                const dot = document.getElementById('rpaStatusDot');
+                const text = document.getElementById('rpaStatusText');
+
+                function renderRpaStatus(active) {
+                    if (!dot || !text) {
+                        return;
+                    }
+                    dot.classList.toggle('active', active);
+                    dot.classList.toggle('inactive', !active);
+                    text.textContent = active ? 'RPA Engine Active' : 'RPA Engine Inactive';
+                }
+
+                async function refreshRpaStatus() {
+                    try {
+                        const response = await fetch('/api/rpa/status', { cache: 'no-store' });
+                        if (!response.ok) {
+                            return;
+                        }
+                        const status = await response.json();
+                        renderRpaStatus(Boolean(status.active));
+
+                        const activeBotCount = document.getElementById('activeBotCount');
+                        if (activeBotCount) {
+                            activeBotCount.textContent = status.activeBots ?? 0;
+                        }
+                    } catch (error) {
+                        // Keep the last visible state if the status request briefly fails.
+                    }
+                }
+
+                refreshRpaStatus();
+                window.setInterval(refreshRpaStatus, 3000);
+            })();
+        </script>
     </nav>
 </body>
 </html>

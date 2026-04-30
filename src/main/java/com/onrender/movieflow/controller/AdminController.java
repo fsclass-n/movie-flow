@@ -1,33 +1,65 @@
 package com.onrender.movieflow.controller;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.onrender.movieflow.service.RpaService;
 
 @Controller
 public class AdminController {
     private final JdbcTemplate jdbcTemplate;
+    private final RpaService rpaService;
 
-    public AdminController(JdbcTemplate jdbcTemplate) { this.jdbcTemplate = jdbcTemplate; }
+    public AdminController(JdbcTemplate jdbcTemplate, RpaService rpaService) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.rpaService = rpaService;
+    }
 
     @GetMapping("/admin")
     public String admin(Model model) {
-        // 간단한 통계 데이터 전달
-        model.addAttribute("activeBots", 12); 
-        model.addAttribute("sentCount", 142);
-        // 로그 테이블에서 최신 로그 10개 가져오기
-        List<String> logs = jdbcTemplate.queryForList("SELECT message FROM rpa_logs ORDER BY id DESC LIMIT 10", String.class);
-        
-        // 디버깅용: 콘솔에 로그 개수가 찍히는지 확인
-        System.out.println("가져온 로그 개수: " + logs.size());
-        for(String log : logs) {
-            System.out.println("로그 내용: " + log);
+        Integer activeBots = rpaService.getActiveJobCount();
+        Integer sentCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM alerts WHERE status = 'SENT'", Integer.class);
+        List<java.util.Map<String, Object>> logs = jdbcTemplate.queryForList("SELECT message, log_level, created_at FROM rpa_logs ORDER BY id DESC LIMIT 15");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        ZoneId seoulZone = ZoneId.of("Asia/Seoul");
+        for (java.util.Map<String, Object> log : logs) {
+            Object createdAt = log.get("created_at");
+            String formatted = "";
+            if (createdAt instanceof Timestamp) {
+                formatted = ((Timestamp) createdAt).toLocalDateTime().format(formatter);
+            } else if (createdAt instanceof LocalDateTime) {
+                formatted = ((LocalDateTime) createdAt).format(formatter);
+            } else {
+                formatted = java.time.ZonedDateTime.now(seoulZone).format(formatter);
+            }
+            log.put("createdAtFormatted", formatted);
         }
-        
+
+        model.addAttribute("activeBots", activeBots != null ? activeBots : 0);
+        model.addAttribute("sentCount", sentCount != null ? sentCount : 0);
         model.addAttribute("logs", logs);
+        model.addAttribute("currentSeoulTime", java.time.ZonedDateTime.now(seoulZone).format(formatter));
         return "admin";
+    }
+
+    @GetMapping("/api/rpa/status")
+    @ResponseBody
+    public Map<String, Object> rpaStatus() {
+        int activeBots = rpaService.getActiveJobCount();
+        return Map.of(
+                "activeBots", activeBots,
+                "active", activeBots > 0
+        );
     }
 }

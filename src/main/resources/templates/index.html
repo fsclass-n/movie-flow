@@ -24,15 +24,24 @@
             <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <span class="badge bg-secondary" th:text="${movie.theaterName}">영화관</span>
-                    <span class="text-secondary small" th:text="${movie.startTime + ' 상영'}">시간</span>
+                    <!-- 상영 시간 중복 표시 방지 (movie.startTime에 이미 '상영'이 포함된 경우 대비) -->
+                    <span class="text-secondary small" th:text="${#strings.contains(movie.startTime, '상영') ? movie.startTime : movie.startTime + ' 상영'}">시간</span>
                 </div>
-                <h3 class="h5 fw-bold mb-4" th:text="${movie.title}">영화 제목</h3>
+
+                <!-- 핵심 수정 부분: 제목만 깔끔하게 추출 -->
+                <h3 class="h5 fw-bold mb-4" 
+                    th:with="rawTitle=${movie.title != null ? movie.title : '영화 제목'}"
+                    th:text="${rawTitle.split('\n')[0].split(' 예매율')[0].split(' 개봉일')[0].replaceFirst('^전체\\s*', '')}">
+                    영화 제목
+                </h3>
+
                 <div class="text-center mb-4">
                     <p class="mb-1 text-secondary small">명당 잔여석</p>
                     <div class="good-seat-count" th:classappend="${movie.goodSeats == 0} ? 'text-secondary' : ''">
                         <span th:text="${movie.goodSeats}">0</span><span class="h5 ms-1">석</span>
                     </div>
                 </div>
+                
                 <a th:if="${movie.goodSeats > 0}" th:href="@{/movie/detail/{id}(id=${movie.id})}" class="btn btn-alert w-100 py-2">상세보기 및 알림 신청</a>
                 <button th:unless="${movie.goodSeats > 0}" class="btn btn-secondary w-100 py-2" disabled>취소표 대기 중...</button>
             </div>
@@ -43,5 +52,39 @@
 <footer th:replace="~{fragments/footer :: common-footer}"></footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script th:src="@{/js/main.js}"></script>
+<script>
+    (() => {
+        const reloadKey = 'movieFlowInitialCrawlReloaded';
+        let sawActiveRpa = false;
+
+        async function reloadAfterInitialCrawl() {
+            if (sessionStorage.getItem(reloadKey) === 'true') {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/rpa/status', { cache: 'no-store' });
+                if (!response.ok) {
+                    window.setTimeout(reloadAfterInitialCrawl, 3000);
+                    return;
+                }
+                const status = await response.json();
+                if (status.active) {
+                    sawActiveRpa = true;
+                } else if (sawActiveRpa) {
+                    sessionStorage.setItem(reloadKey, 'true');
+                    window.location.reload();
+                    return;
+                }
+            } catch (error) {
+                // Try again quietly; the page can still render with the current DB values.
+            }
+
+            window.setTimeout(reloadAfterInitialCrawl, 3000);
+        }
+
+        reloadAfterInitialCrawl();
+    })();
+</script>
 </body>
 </html>

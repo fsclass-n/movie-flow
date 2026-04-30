@@ -8,16 +8,19 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" th:href="@{/css/common.css}">
     <style>
-        /* 기존 로그 레벨별 색상 유지 */
-        .log-INFO { color: #00ff00; }  /* 초록 */
-        .log-WARN { color: #ffcc00; }  /* 노랑 */
-        .log-ERROR { color: #ff4444; } /* 빨강 */
-        
-        /* 시간 표시 스타일 추가 */
+        .log-INFO { color: #00ff00; }
+        .log-WARN { color: #ffcc00; }
+        .log-ERROR { color: #ff4444; }
         .log-timestamp { color: #888; font-size: 0.9em; margin-right: 8px; }
         .log-message { color: #f8f9fa; margin-left: 8px; }
-        
-        /* 터미널 박스 가독성 보강 */
+        .admin-stat-card {
+            min-height: 135px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
         .terminal-window {
             background-color: #000;
             padding: 20px;
@@ -29,27 +32,27 @@
     </style>
 </head>
 <body>
-    
+
     <div th:replace="~{fragments/header :: common-header}"></div>
 
     <main class="container my-5">
-        <div class="row mb-4">
+        <div class="row mb-4 align-items-stretch">
             <div class="col-md-4">
-                <div class="card-custom p-4 text-center">
-                    <h6 class="text-secondary">활성 봇 수</h6>
-                    <div class="display-5 fw-bold text-primary" th:text="${activeBots}">0</div>
+                <div class="card-custom p-4 text-center admin-stat-card">
+                    <h6 class="text-secondary">활성 봇</h6>
+                    <div id="activeBotCount" class="display-5 fw-bold text-primary" th:text="${activeBots != null ? activeBots : 0}">0</div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card-custom p-4 text-center">
+                <div class="card-custom p-4 text-center admin-stat-card">
                     <h6 class="text-secondary">알림 전송 수</h6>
-                    <div class="display-5 fw-bold text-success" th:text="${sentCount}">0</div>
+                    <div class="display-5 fw-bold text-success" th:text="${sentCount != null ? sentCount : 0}">0</div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card-custom p-4 text-center">
-                    <h6 class="text-secondary">시스템 상태</h6>
-                    <div class="display-5 fw-bold text-info">Active</div>
+                <div class="card-custom p-4 text-center admin-stat-card">
+                    <h6 class="text-secondary">한국 시간</h6>
+                    <div id="seoulClock" class="h3 fw-bold text-info mb-0" th:text="${currentSeoulTime}">2026-05-01 12:00:00</div>
                 </div>
             </div>
         </div>
@@ -59,32 +62,14 @@
                 <i class="fa-solid fa-terminal me-2"></i>RPA Execution Log
                 <small class="text-secondary ms-2" style="font-size: 0.7em;">(최신 15개 내역)</small>
             </h5>
-            
+
             <div class="terminal-window font-monospace small">
-                <!-- iterStat을 사용하여 15개까지만 노출 제어 -->
                 <div th:each="log, iterStat : ${logs}" th:if="${iterStat.index < 15}" class="mb-2">
-                    
-                    <!-- 1. 단순 문자열 로그일 경우 -->
-                    <th:block th:if="${log instanceof T(java.lang.String)}">
-                        <span class="log-timestamp" th:text="${#calendars.format(#calendars.createNow(), 'yyyy-MM-dd HH:mm:ss')}"></span>
-                        <span class="log-message" th:text="${log}"></span>
-                    </th:block>
-                    
-                    <!-- 2. Map 형태의 구조화된 로그일 경우 (권장) -->
-                    <th:block th:if="${log instanceof T(java.util.Map)}">
-                        <!-- 날짜와 시간 표시 -->
-                        <span class="log-timestamp" 
-                              th:text="${log.timestamp != null ? log.timestamp : #calendars.format(#calendars.createNow(), 'yyyy-MM-dd HH:mm:ss')}">
-                        </span>
-                        
-                        <!-- 로그 레벨 [INFO, WARN, ERROR] -->
-                        <span th:class="'log-' + ${log.log_level}" th:text="'[' + ${log.log_level} + ']'"></span>
-                        
-                        <!-- 실제 로그 메시지 -->
-                        <span class="log-message" th:text="${log.message}"></span>
-                    </th:block>
+                    <span class="log-timestamp" th:text="${log.createdAtFormatted}"></span>
+                    <span th:class="'log-' + ${log.log_level}" th:text="'[' + ${log.log_level} + ']'"></span>
+                    <span class="log-message" th:text="${log.message}"></span>
                 </div>
-                
+
                 <div th:if="${#lists.isEmpty(logs)}" class="text-secondary text-center mt-5">
                     표시할 로그 데이터가 없습니다.
                 </div>
@@ -93,6 +78,31 @@
     </main>
 
     <div th:replace="~{fragments/footer :: common-footer}"></div>
+
+    <script>
+        (() => {
+            const clock = document.getElementById('seoulClock');
+            const formatter = new Intl.DateTimeFormat('sv-SE', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+
+            function tickSeoulClock() {
+                if (clock) {
+                    clock.textContent = formatter.format(new Date()).replace(' ', ' ');
+                }
+            }
+
+            tickSeoulClock();
+            window.setInterval(tickSeoulClock, 1000);
+        })();
+    </script>
 
 </body>
 </html>

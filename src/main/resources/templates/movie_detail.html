@@ -18,30 +18,61 @@
                 <div class="card-custom p-4 mb-4">
                     <h2 class="fw-bold mb-4">
                         <span th:text="${movie.title}">영화 제목</span>
-                        <small class="text-secondary h6" th:text="${movie.theaterName}">상영관</small>
+                        <small class="text-secondary h6 ms-2" th:text="${movie.theaterName}">상영관</small>
                     </h2>
-                    <h5 class="mb-3"><i class="fa-solid fa-clock me-2"></i>상영 시간 정보</h5>
+
+                    <h5 class="mb-3"><i class="fa-solid fa-clock me-2"></i>상영 날짜/시간 정보</h5>
                     <div class="d-flex gap-2 flex-wrap mb-4">
-                        <button class="btn btn-outline-light active" 
-                                th:text="${movie.startTime} + ' (' + ${movie.goodSeats} + '석)'"></button>
+                        <button class="btn btn-outline-light active"
+                                th:text="${movie.startTime + ' (명당 잔여석: ' + goodSeats.size() + '석/' + seatTotalSeats + '석)'}">상영 정보</button>
                     </div>
-                    <div class="bg-dark p-5 rounded-3 text-center mb-4">
-                        <div class="text-secondary mb-3">SCREEN</div>
-                        <div class="d-flex justify-content-center gap-1 mb-1" th:each="i : ${#numbers.sequence(1, 5)}">
-                            <span class="bg-secondary d-inline-block rounded-1" style="width:20px; height:20px;"></span>
-                            <span class="bg-danger d-inline-block rounded-1" style="width:20px; height:20px;"></span>
+
+                    <div class="bg-dark p-4 rounded-3 mb-4">
+                        <div class="text-secondary mb-4 text-center">SCREEN</div>
+
+                        <div class="seat-layout" th:classappend="${movie.theaterName.contains('롯데')} ? ' lotte-layout'">
+                            <div class="seat-rows">
+                                <div class="seat-row" th:each="row, rowStat : ${seatRows}">
+                                    <div class="seat-label" th:text="${row}">A</div>
+                                    <div th:each="col : ${#numbers.sequence(1, seatsPerRow)}"
+                                         th:if="${rowStat.index * seatsPerRow + col <= seatTotalSeats}"
+                                         class="seat"
+                                         th:with="seatId=${row + col}"
+                                         th:classappend="${(#lists.contains(premiumSeatIds, seatId) ? ' premium-seat' : '') + (#lists.contains(goodSeats, seatId) ? ' good-seat' : (#lists.contains(availableSeatIds, seatId) ? ' available' : ' unavailable'))}"
+                                         th:text="${col}">1</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="seat-legend mt-4">
+                            <div class="seat-legend-item">
+                                <div class="legend-seat" style="background-color: #334155; border: 1px solid rgba(255,255,255,0.2);"></div>
+                                <span>일반 잔여석</span>
+                            </div>
+                            <div class="seat-legend-item">
+                                <div class="legend-seat" style="background-color: #334155; border: 2px solid #fb7185;"></div>
+                                <span>명당 구역</span>
+                            </div>
+                            <div class="seat-legend-item">
+                                <div class="legend-seat" style="background-color: #e11d48; border: 2px solid #fb7185;"></div>
+                                <span>명당 잔여석</span>
+                            </div>
+                            <div class="seat-legend-item">
+                                <div class="legend-seat" style="background-color: #111827; border: 1px solid rgba(255,255,255,0.08);"></div>
+                                <span>매진/선택 불가</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <div class="col-lg-4">
                 <form th:action="@{/alert/setup}" method="post" class="card-custom p-4 sticky-top" style="top: 100px;">
                     <input type="hidden" name="movieId" th:value="${movie.id}">
                     <h4 class="fw-bold mb-3">RPA 알림 신청</h4>
                     <div class="mb-3">
                         <label class="form-label small">수신 이메일</label>
-                        <input type="email" name="email" class="form-control bg-dark text-white border-secondary" required>
+                        <input type="email" name="email" class="form-control bg-dark text-white border-secondary" placeholder="example@mail.com" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small">알림 조건</label>
@@ -57,6 +88,6 @@
     </main>
 
     <div th:replace="~{fragments/footer :: common-footer}"></div>
-
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

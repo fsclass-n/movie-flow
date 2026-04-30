@@ -39,14 +39,196 @@ body {
 .movie-card:hover { transform: translateY(-5px); }
 
 .rpa-status-dot {
-    width: 10px; height: 10px; background-color: var(--accent-green);
+    width: 10px; height: 10px; background-color: #666;
     border-radius: 50%; display: inline-block; margin-right: 5px;
-    box-shadow: 0 0 10px var(--accent-green); animation: blink 1.5s infinite;
+}
+
+.rpa-status-dot.active {
+    background-color: #10b981;
+    box-shadow: 0 0 10px #10b981;
+    animation: blink 1.5s infinite;
+}
+
+.rpa-status-dot.inactive {
+    background-color: #666;
+    box-shadow: none;
+    animation: none;
 }
 
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* 좌석 영역 스타일 */
+.seat-layout {
+    display: flex;
+    justify-content: center;
+    overflow-x: hidden;
+    min-width: 0;
+}
+
+.seat-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.seat-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lotte-layout .seat-row {
+    gap: 4px;
+}
+
+.seat-row-short {
+    justify-content: flex-start;
+}
+
+.seat-label {
+    width: 20px;
+    text-align: center;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.seat {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.lotte-layout .seat {
+    width: 20px;
+    height: 22px;
+    font-size: 9px;
+}
+
+.seat.available {
+    background-color: #334155;
+    color: #94a3b8;
+}
+
+.seat.unavailable {
+    background-color: #111827;
+    color: #475569;
+    border-color: rgba(255, 255, 255, 0.08);
+    cursor: default;
+}
+
+.seat.good-seat {
+    background-color: #e11d48;
+    color: white;
+    box-shadow: 0 0 8px #e11d48;
+    font-weight: 600;
+}
+
+.seat.premium-seat {
+    border: 2px solid #fb7185;
+}
+
+.seat.available:hover,
+.seat.good-seat:hover {
+    transform: scale(1.1);
+}
+
+.seat-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.seat-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-seat {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
 
 .btn-alert, .btn-primary-custom { background-color: var(--primary-red); border: none; color: white; font-weight: 600; }
 .btn-alert:hover { background-color: #be123c; color: white; }
 
 footer { margin-top: auto; padding: 40px 0; background-color: #0b1120; border-top: 1px solid var(--border-color); color: #94a3b8; }
+
+/* RPA 상태 애니메이션 */
+.rpa-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.rpa-status.active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.rpa-status.inactive {
+    background: rgba(100, 100, 100, 0.1);
+    border: 1px solid rgba(100, 100, 100, 0.2);
+}
+
+.rpa-status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rpa-status.active .rpa-status-indicator {
+    background-color: #10b981;
+    box-shadow: 0 0 12px #10b981;
+    animation: pulse-green 1.5s infinite;
+}
+
+.rpa-status.inactive .rpa-status-indicator {
+    background-color: #666;
+}
+
+@keyframes pulse-green {
+    0%, 100% { 
+        box-shadow: 0 0 12px #10b981, 0 0 20px rgba(16, 185, 129, 0.5);
+        transform: scale(1);
+    }
+    50% { 
+        box-shadow: 0 0 20px #10b981, 0 0 30px rgba(16, 185, 129, 0.3);
+        transform: scale(1.2);
+    }
+}
+
+.rpa-status-text {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.rpa-status.active .rpa-status-text {
+    color: #10b981;
+}
+
+.rpa-status.inactive .rpa-status-text {
+    color: #666;
+}

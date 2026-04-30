@@ -36,4 +36,9 @@ public class AlertRepository {
         String sql = "DELETE FROM alerts WHERE id = ?";
         jdbcTemplate.update(sql, id);
     }
+
+    public void markAsSent(String email, Long movieId) {
+        String sql = "UPDATE alerts SET status = 'SENT' WHERE email = ? AND movie_id = ?";
+        jdbcTemplate.update(sql, email, movieId);
+    }
 }

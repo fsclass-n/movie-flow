@@ -23,7 +23,9 @@ public class MovieRepository {
             dto.setTitle(rs.getString("title"));
             dto.setTheaterName(rs.getString("theater_name"));
             dto.setStartTime(rs.getString("start_time"));
+            dto.setTotalSeats(rs.getInt("total_seats"));
             dto.setGoodSeats(rs.getInt("good_seats"));
+            dto.setAvailableSeats(rs.getString("available_seats"));
             return dto;
         });
     }
@@ -36,7 +38,9 @@ public class MovieRepository {
                 dto.setTitle(rs.getString("title"));
                 dto.setTheaterName(rs.getString("theater_name"));
                 dto.setStartTime(rs.getString("start_time"));
+                dto.setTotalSeats(rs.getInt("total_seats"));
                 dto.setGoodSeats(rs.getInt("good_seats"));
+                dto.setAvailableSeats(rs.getString("available_seats"));
                 return dto;
             }, id);
         } catch (EmptyResultDataAccessException e) {
