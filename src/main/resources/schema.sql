@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     user_id BIGINT, 
     movie_id BIGINT, 
     email VARCHAR(255), -- 알림용 이메일 중복 저장 (성능 최적화)
+    phone VARCHAR(20), -- 알림용 전화번호
     status VARCHAR(20) DEFAULT 'WATCHING', 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, 

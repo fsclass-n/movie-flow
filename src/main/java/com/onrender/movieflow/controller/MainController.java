@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,9 +43,16 @@ public class MainController {
 
     @GetMapping("/")
     public String index(Model model) {
-        rpaService.runInitialCrawlIfNeeded();
+        boolean initialCrawlStarted = rpaService.runInitialCrawlIfNeeded();
+        model.addAttribute("initialCrawlStarted", initialCrawlStarted);
         model.addAttribute("movies", movieRepository.findAll());
         return "index";
+    }
+
+    @GetMapping("/api/movies")
+    @ResponseBody
+    public java.util.List<com.onrender.movieflow.dto.MovieDto> fetchMovies() {
+        return movieRepository.findAll();
     }
 
     @GetMapping("/movie/detail/{id}")

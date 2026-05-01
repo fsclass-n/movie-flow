@@ -18,13 +18,13 @@ public class AlertRepository {
     // 알림 신청 저장
     public void insert(AlertDto alertDto) {
         // DB 컬럼명에 맞춰 수정 (이전 에러 해결용)
-        String sql = "INSERT INTO alerts (email, movie_id, status) VALUES (?, ?, 'WATCHING')";
-        jdbcTemplate.update(sql, alertDto.getEmail(), alertDto.getMovieId());
+        String sql = "INSERT INTO alerts (email, phone, movie_id, status) VALUES (?, ?, ?, 'WATCHING')";
+        jdbcTemplate.update(sql, alertDto.getEmail(), alertDto.getPhone(), alertDto.getMovieId());
     }
 
     // 마이페이지 목록 조회
     public List<Map<String, Object>> findAllWithMovie() {
-        String sql = "SELECT a.id, a.email, a.status, m.title AS movie_title, m.theater_name, m.start_time " +
+        String sql = "SELECT a.id, a.email, a.phone, a.status, m.title AS movie_title, m.theater_name, m.start_time " +
                      "FROM alerts a " +
                      "JOIN movies m ON a.movie_id = m.id " +
                      "ORDER BY a.id DESC";

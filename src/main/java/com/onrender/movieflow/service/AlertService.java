@@ -5,9 +5,13 @@ import com.onrender.movieflow.dto.MovieDto;
 import com.onrender.movieflow.repository.AlertRepository;
 import com.onrender.movieflow.repository.MovieRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import com.twilio.Twilio;
+import com.twilio.rest.api.v2010.account.Message;
+import com.twilio.type.PhoneNumber;
 
 @Slf4j
 @Service
@@ -16,6 +20,15 @@ public class AlertService {
     private final MovieRepository movieRepository;
     private final RpaService rpaService;
     private final JavaMailSender mailSender;
+
+    @Value("${twilio.account.sid:}")
+    private String twilioAccountSid;
+
+    @Value("${twilio.auth.token:}")
+    private String twilioAuthToken;
+
+    @Value("${twilio.phone.number:}")
+    private String twilioPhoneNumber;
 
     public AlertService(AlertRepository alertRepository, MovieRepository movieRepository,
                         RpaService rpaService, JavaMailSender mailSender) {
@@ -56,7 +69,42 @@ public class AlertService {
             alertRepository.markAsSent(alertDto.getEmail(), alertDto.getMovieId());
             log.info("알림 이메일 전송 완료: {}", alertDto.getEmail());
         } catch (Exception e) {
-            log.error("이메일 전송 실패: {}", e.getMessage());
+            log.error("이메일 전송 실패: {}", e.getMessage(), e);
+        }
+    }
+
+    private void sendAlertSms(AlertDto alertDto) {
+        if (alertDto.getPhone() == null || alertDto.getPhone().isEmpty() ||
+            twilioAccountSid == null || twilioAccountSid.isEmpty() ||
+            twilioAuthToken == null || twilioAuthToken.isEmpty()) {
+            log.info("SMS 설정이 없어 SMS 알림을 건너뜁니다: {}", alertDto.getEmail());
+            return;
+        }
+
+        try {
+            Twilio.init(twilioAccountSid, twilioAuthToken);
+
+            MovieDto movie = movieRepository.findById(alertDto.getMovieId());
+            String movieTitle = movie != null ? movie.getTitle() : alertDto.getMovieId() + "번 영화";
+            String theaterName = movie != null ? movie.getTheaterName() : "상영관 정보 없음";
+            String startTime = movie != null ? movie.getStartTime() : "상영 시간 정보 없음";
+            Integer goodSeats = movie != null ? movie.getGoodSeats() : 0;
+
+            String messageBody = "Movie Flow RPA 감시 시작\n" +
+                    "영화: " + movieTitle + "\n" +
+                    "영화관: " + theaterName + "\n" +
+                    "시간: " + startTime + "\n" +
+                    "명당 잔여석: " + goodSeats + "석";
+
+            Message message = Message.creator(
+                    new PhoneNumber(alertDto.getPhone()),
+                    new PhoneNumber(twilioPhoneNumber),
+                    messageBody
+            ).create();
+
+            log.info("SMS 알림 전송 완료: {} - SID: {}", alertDto.getPhone(), message.getSid());
+        } catch (Exception e) {
+            log.error("SMS 전송 실패: {}", e.getMessage());
         }
     }
 

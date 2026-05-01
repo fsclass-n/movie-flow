@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" th:href="@{/css/common.css}">
 </head>
-<body>
+<body th:attr="data-initial-crawl-started=${initialCrawlStarted}">
 
 <div th:replace="~{fragments/header :: common-header}"></div>
 
@@ -21,27 +21,30 @@
 <main class="container my-5">
     <div class="row">
         <div class="col-md-4" th:each="movie : ${movies}">
-            <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''">
+            <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''" th:attr="data-movie-id=${movie.id}" th:with="isLoading=${initialCrawlStarted}">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <span class="badge bg-secondary" th:text="${movie.theaterName}">영화관</span>
-                    <!-- 상영 시간 중복 표시 방지 (movie.startTime에 이미 '상영'이 포함된 경우 대비) -->
-                    <span class="text-secondary small" th:text="${#strings.contains(movie.startTime, '상영') ? movie.startTime : movie.startTime + ' 상영'}">시간</span>
+                    <span class="text-secondary small" data-role="movie-start-time"
+                          th:text="${isLoading ? '상영 시간 조회중' : (movie.startTime != null ? (#strings.contains(movie.startTime, '상영') ? movie.startTime : movie.startTime + ' 상영') : '상영 정보 확인 중')}">시간</span>
                 </div>
 
-                <!-- 핵심 수정 부분: 제목만 깔끔하게 추출 -->
-                <h3 class="h5 fw-bold mb-4" 
-                    th:with="rawTitle=${movie.title != null ? movie.title : '영화 제목'}"
-                    th:text="${rawTitle.split('\n')[0].split(' 예매율')[0].split(' 개봉일')[0].replaceFirst('^전체\\s*', '')}">
+                <h3 class="h5 fw-bold mb-3" data-role="movie-title"
+                    th:text="${isLoading ? '영화 제목 조회중' : (movie.title != null ? movie.title.split('\n')[0].split(' 예매율')[0].split(' 개봉일')[0].replaceFirst('^전체\\s*', '') : (movie.theaterName != null ? movie.theaterName + ' 상영 정보 확인 중' : '영화 제목 확인 중'))}">
                     영화 제목
                 </h3>
+
+                <div class="mb-3 text-secondary small">
+                    <div>총 좌석수 <span data-role="movie-total-seats"
+                                         th:text="${isLoading ? '조회중...' : (movie.totalSeats != null and movie.totalSeats > 0 ? movie.totalSeats : (movie.theaterName != null and movie.theaterName.contains('롯데') ? 175 : 150))}">0</span>석</div>
+                </div>
 
                 <div class="text-center mb-4">
                     <p class="mb-1 text-secondary small">명당 잔여석</p>
                     <div class="good-seat-count" th:classappend="${movie.goodSeats == 0} ? 'text-secondary' : ''">
-                        <span th:text="${movie.goodSeats}">0</span><span class="h5 ms-1">석</span>
+                        <span data-role="movie-good-seats" th:text="${isLoading ? '조회중' : (movie.goodSeats != null ? movie.goodSeats : 0)}">0</span><span class="h5 ms-1" th:text="${isLoading ? '' : '석'}">석</span>
                     </div>
                 </div>
-                
+
                 <a th:if="${movie.goodSeats > 0}" th:href="@{/movie/detail/{id}(id=${movie.id})}" class="btn btn-alert w-100 py-2">상세보기 및 알림 신청</a>
                 <button th:unless="${movie.goodSeats > 0}" class="btn btn-secondary w-100 py-2" disabled>취소표 대기 중...</button>
             </div>
@@ -55,35 +58,86 @@
 <script>
     (() => {
         const reloadKey = 'movieFlowInitialCrawlReloaded';
-        let sawActiveRpa = false;
+        const initialCrawlStarted = document.body.dataset.initialCrawlStarted === 'true';
+        let crawlSeenActive = false;
+        let updateCompleted = false;
 
-        async function reloadAfterInitialCrawl() {
-            if (sessionStorage.getItem(reloadKey) === 'true') {
+        function normalizeTitle(rawTitle) {
+            if (!rawTitle) {
+                return '영화 제목 확인 중';
+            }
+            return rawTitle
+                .split('\n')[0]
+                .split(' 예매율')[0]
+                .split(' 개봉일')[0]
+                .replace(/^전체\s*/, '');
+        }
+
+        function applyMovieUpdates(movies) {
+            movies.forEach(movie => {
+                const card = document.querySelector(`.movie-card[data-movie-id='${movie.id}']`);
+                if (!card) return;
+
+                const titleEl = card.querySelector('[data-role="movie-title"]');
+                const startTimeEl = card.querySelector('[data-role="movie-start-time"]');
+                const totalSeatsEl = card.querySelector('[data-role="movie-total-seats"]');
+                const goodSeatsEl = card.querySelector('[data-role="movie-good-seats"]');
+
+                if (titleEl) {
+                    titleEl.textContent = normalizeTitle(movie.title || movie.theaterName || '영화 제목 확인 중');
+                }
+                if (startTimeEl) {
+                    startTimeEl.textContent = movie.startTime ? movie.startTime : '상영 정보 확인 중';
+                }
+                if (totalSeatsEl) {
+                    const totalSeats = movie.totalSeats != null && movie.totalSeats > 0
+                        ? movie.totalSeats
+                        : (movie.theaterName && movie.theaterName.includes('롯데') ? 175 : 150);
+                    totalSeatsEl.textContent = totalSeats;
+                }
+                if (goodSeatsEl) {
+                    goodSeatsEl.textContent = movie.goodSeats != null ? movie.goodSeats : 0;
+                }
+            });
+        }
+
+        async function refreshAfterInitialCrawl() {
+            if (!initialCrawlStarted || updateCompleted) {
                 return;
             }
 
             try {
                 const response = await fetch('/api/rpa/status', { cache: 'no-store' });
                 if (!response.ok) {
-                    window.setTimeout(reloadAfterInitialCrawl, 3000);
+                    window.setTimeout(refreshAfterInitialCrawl, 3000);
                     return;
                 }
+
                 const status = await response.json();
                 if (status.active) {
-                    sawActiveRpa = true;
-                } else if (sawActiveRpa) {
-                    sessionStorage.setItem(reloadKey, 'true');
-                    window.location.reload();
+                    crawlSeenActive = true;
+                    window.setTimeout(refreshAfterInitialCrawl, 3000);
                     return;
+                }
+
+                if (!status.active && (crawlSeenActive || initialCrawlStarted)) {
+                    const movieResponse = await fetch('/api/movies', { cache: 'no-store' });
+                    if (movieResponse.ok) {
+                        const movies = await movieResponse.json();
+                        applyMovieUpdates(movies);
+                        updateCompleted = true;
+                    }
                 }
             } catch (error) {
                 // Try again quietly; the page can still render with the current DB values.
             }
 
-            window.setTimeout(reloadAfterInitialCrawl, 3000);
+            if (!updateCompleted) {
+                window.setTimeout(refreshAfterInitialCrawl, 3000);
+            }
         }
 
-        reloadAfterInitialCrawl();
+        refreshAfterInitialCrawl();
     })();
 </script>
 </body>

@@ -119,6 +119,11 @@ def choose_best_schedule(schedules):
     if mario_schedules:
         candidates = mario_schedules
 
+    # 오전 상영 시간만 선택 (hour < 12)
+    morning_schedules = [schedule for schedule in candidates if schedule["start_dt"].hour < 12]
+    if morning_schedules:
+        candidates = morning_schedules
+
     today_schedules = [schedule for schedule in candidates if schedule["start_dt"].date() == datetime.now().date()]
     if any(estimate_good_seats(schedule) > 0 for schedule in today_schedules):
         candidates = today_schedules

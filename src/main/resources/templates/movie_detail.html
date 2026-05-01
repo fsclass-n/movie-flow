@@ -75,6 +75,10 @@
                         <input type="email" name="email" class="form-control bg-dark text-white border-secondary" placeholder="example@mail.com" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label small">수신 전화번호 (SMS 알림용)</label>
+                        <input type="tel" name="phone" class="form-control bg-dark text-white border-secondary" placeholder="010-1234-5678" pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}">
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label small">알림 조건</label>
                         <select name="condition" class="form-select bg-dark text-white border-secondary">
                             <option value="1">명당 구역 1석 이상</option>

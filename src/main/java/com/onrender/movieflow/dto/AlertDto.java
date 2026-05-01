@@ -11,5 +11,6 @@ public class AlertDto {
     private String theaterName;
     private String startTime;
     private String email;      // 알림 수신 이메일
+    private String phone;      // 알림 수신 전화번호
     private String status;     // WATCHING, SENT 등
 }
