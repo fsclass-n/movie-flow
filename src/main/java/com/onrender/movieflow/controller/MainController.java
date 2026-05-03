@@ -7,6 +7,8 @@ import com.onrender.movieflow.repository.AlertRepository;
 import com.onrender.movieflow.repository.MovieRepository;
 import com.onrender.movieflow.service.AlertService;
 import com.onrender.movieflow.service.RpaService;
+import com.onrender.movieflow.util.SeatUtils;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +19,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Controller
 public class MainController {
@@ -45,14 +50,19 @@ public class MainController {
     public String index(Model model) {
         boolean initialCrawlStarted = rpaService.runInitialCrawlIfNeeded();
         model.addAttribute("initialCrawlStarted", initialCrawlStarted);
-        model.addAttribute("movies", movieRepository.findAll());
+
+        List<com.onrender.movieflow.dto.MovieDto> movies = movieRepository.findAll();
+        movies.forEach(this::refreshComputedGoodSeats);
+        model.addAttribute("movies", movies);
         return "index";
     }
 
     @GetMapping("/api/movies")
     @ResponseBody
     public java.util.List<com.onrender.movieflow.dto.MovieDto> fetchMovies() {
-        return movieRepository.findAll();
+        List<com.onrender.movieflow.dto.MovieDto> movies = movieRepository.findAll();
+        movies.forEach(this::refreshComputedGoodSeats);
+        return movies;
     }
 
     @GetMapping("/movie/detail/{id}")
@@ -65,12 +75,11 @@ public class MainController {
         int totalSeats = getTotalSeats(movie);
         int seatsPerRow = getSeatsPerRow(movie, totalSeats);
         List<String> seatRows = getSeatRows(totalSeats, seatsPerRow);
-        for (String row : List.of("C", "D", "E")) {
-            for (int col = premiumStart(seatsPerRow); col <= premiumEnd(seatsPerRow); col++) {
-                premiumSeatIds.add(row + col);
-            }
-        }
 
+        Set<String> premiumSeatSet = SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
+        premiumSeatIds.addAll(premiumSeatSet);
+
+        int displayedGoodSeatCount = 0;
         if (movie != null && movie.getAvailableSeats() != null) {
             try {
                 List<List<?>> seats = objectMapper.readValue(movie.getAvailableSeats(), new TypeReference<List<List<?>>>() {
@@ -81,11 +90,12 @@ public class MainController {
                         String col = seat.get(1).toString();
                         String seatId = row + col;
                         availableSeatIds.add(seatId);
-                        if (isPremiumSeat(row, col, seatsPerRow)) {
+                        if (premiumSeatSet.contains(seatId)) {
                             goodSeats.add(seatId);
                         }
                     }
                 }
+                displayedGoodSeatCount = goodSeats.size();
                 model.addAttribute("availableSeatsList", seats);
             } catch (Exception e) {
                 model.addAttribute("availableSeatsList", List.of());
@@ -94,7 +104,11 @@ public class MainController {
             model.addAttribute("availableSeatsList", List.of());
         }
 
+        if (movie != null) {
+            movie.setGoodSeats(displayedGoodSeatCount);
+        }
         model.addAttribute("goodSeats", goodSeats);
+        model.addAttribute("displayGoodSeatCount", displayedGoodSeatCount);
         model.addAttribute("availableSeatIds", availableSeatIds);
         model.addAttribute("premiumSeatIds", premiumSeatIds);
         model.addAttribute("seatRows", seatRows);
@@ -105,13 +119,33 @@ public class MainController {
     }
 
     @GetMapping("/mypage")
-    public String myPage(Model model) {
-        model.addAttribute("alerts", alertRepository.findAllWithMovie());
+    public String myPage(Model model, HttpSession session) {
+        String currentUserEmail = (String) session.getAttribute("userEmail");
+        if (currentUserEmail == null || currentUserEmail.isEmpty()) {
+            model.addAttribute("alerts", List.of());
+            return "mypage";
+        }
+
+        List<Map<String, Object>> alerts = alertRepository.findByUserEmail(currentUserEmail);
+        if (alerts == null || alerts.isEmpty()) {
+            session.removeAttribute("userEmail");
+            session.removeAttribute("alertCreated");
+            model.addAttribute("alerts", List.of());
+        } else {
+            model.addAttribute("alerts", alerts);
+        }
         return "mypage";
     }
 
     @PostMapping("/alert/setup")
-    public String setupAlert(@ModelAttribute AlertDto alertDto) {
+    public String setupAlert(@ModelAttribute AlertDto alertDto, HttpSession session) {
+        String currentUserEmail = (String) session.getAttribute("userEmail");
+        if (currentUserEmail == null || currentUserEmail.isEmpty()) {
+            currentUserEmail = alertDto.getEmail();
+            session.setAttribute("userEmail", currentUserEmail);
+        }
+        session.setAttribute("alertCreated", true);
+        alertDto.setUserEmail(currentUserEmail);
         alertService.createAlert(alertDto);
         return "redirect:/mypage";
     }
@@ -131,6 +165,43 @@ public class MainController {
         } catch (NumberFormatException e) {
             return false;
         }
+    }
+
+    private void refreshComputedGoodSeats(com.onrender.movieflow.dto.MovieDto movie) {
+        if (movie == null) {
+            return;
+        }
+        int totalSeats = getTotalSeats(movie);
+        int seatsPerRow = getSeatsPerRow(movie, totalSeats);
+        Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
+        List<String> availableSeatIds = parseAvailableSeatIds(movie.getAvailableSeats());
+        int computedGoodSeats = (int) availableSeatIds.stream().filter(premiumSeatIds::contains).count();
+        movie.setGoodSeats(computedGoodSeats);
+    }
+
+    private List<String> parseAvailableSeatIds(String availableSeatsJson) {
+        if (availableSeatsJson == null || availableSeatsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<List<?>> seats = objectMapper.readValue(availableSeatsJson, new TypeReference<List<List<?>>>() {
+            });
+            List<String> seatIds = new ArrayList<>();
+            for (List<?> seat : seats) {
+                if (seat.size() == 2) {
+                    String row = seat.get(0).toString();
+                    String col = seat.get(1).toString();
+                    seatIds.add(row + col);
+                }
+            }
+            return seatIds;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private Set<String> getPremiumSeatIds(int totalSeats, int seatsPerRow) {
+        return SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
     }
 
     private boolean isLotteTheater(com.onrender.movieflow.dto.MovieDto movie) {

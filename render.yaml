@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: movie-flow
+    plan: free  # 또는 starter, standard 등으로 변경 가능
+    runtime: docker
+    region: oregon  # 또는 singapore, frankfurt 등으로 변경 가능
+    dockerfile: ./Dockerfile
+    dockerContext: .
+    
+    # 환경 변수 설정
+    envVars:
+      - key: JAVA_OPTS
+        value: -Xmx512m -Xms256m
+      - key: SERVER_PORT
+        value: 8080
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: SPRING_DATASOURCE_URL
+        fromService:
+          name: movie-flow-db
+          property: connection_string
+      - key: SPRING_DATASOURCE_USERNAME
+        fromService:
+          name: movie-flow-db
+          property: username
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromService:
+          name: movie-flow-db
+          property: password
+    
+    # 빌드 명령
+    buildCommand: chmod +x gradlew && ./gradlew clean build -x test --no-daemon
+    
+    # 헬스 체크
+    healthCheckPath: /
+    healthCheckInterval: 30
+    healthCheckStartupFailureThresholdCount: 3
+    
+    # 포트
+    ports:
+      - port: 8080
+        protocol: HTTP
+    
+    # 자동 배포
+    autoDeploy: true
+
+databases:
+  - name: movie-flow-db
+    ipAllowList: []

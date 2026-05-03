@@ -24,7 +24,7 @@
                     <h5 class="mb-3"><i class="fa-solid fa-clock me-2"></i>상영 날짜/시간 정보</h5>
                     <div class="d-flex gap-2 flex-wrap mb-4">
                         <button class="btn btn-outline-light active"
-                                th:text="${movie.startTime + ' (명당 잔여석: ' + goodSeats.size() + '석/' + seatTotalSeats + '석)'}">상영 정보</button>
+                                th:text="${movie.startTime + ' (명당 잔여석: ' + (displayGoodSeatCount != null ? displayGoodSeatCount : goodSeats.size()) + '석/' + seatTotalSeats + '석)'}">상영 정보</button>
                     </div>
 
                     <div class="bg-dark p-4 rounded-3 mb-4">

@@ -2,10 +2,15 @@ package com.onrender.movieflow.service;
 
 import com.onrender.movieflow.dto.AlertDto;
 import com.onrender.movieflow.dto.MovieDto;
+import com.onrender.movieflow.event.MovieUpdatedEvent;
 import com.onrender.movieflow.repository.AlertRepository;
 import com.onrender.movieflow.repository.MovieRepository;
 import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -117,6 +122,11 @@ public class AlertService {
         log.info("알림 삭제 요청 - ID: {}", id);
         alertRepository.deleteById(id);
         log.info("알림 삭제 완료 - ID: {}", id);
+    }
+
+    @EventListener
+    public void handleMovieUpdated(MovieUpdatedEvent event) {
+        sendUpdateAlert(event.getMovieId(), event.getMovie());
     }
 
     public void sendUpdateAlert(Long movieId, MovieDto movie) {

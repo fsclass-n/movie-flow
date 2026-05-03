@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# Build outputs
+build/
+.gradle/
+*.jar
+target/
+dist/
+
+# Documentation
+README.md
+HELP.md
+docs/
+
+# RPA (별도 서비스로 분리)
+rpa/
+
+# Test
+src/test/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

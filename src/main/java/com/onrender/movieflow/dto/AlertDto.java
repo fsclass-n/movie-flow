@@ -13,4 +13,5 @@ public class AlertDto {
     private String email;      // 알림 수신 이메일
     private String phone;      // 알림 수신 전화번호
     private String status;     // WATCHING, SENT 등
+    private String userEmail;  // 세션에서 가져온 현재 사용자 이메일
 }

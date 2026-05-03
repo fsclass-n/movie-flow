@@ -1,9 +1,13 @@
+package com.onrender.movieflow.service;
+
 import com.onrender.movieflow.dto.MovieDto;
+import com.onrender.movieflow.event.MovieUpdatedEvent;
 import com.onrender.movieflow.repository.MovieRepository;
-import com.onrender.movieflow.service.AlertService;
+import com.onrender.movieflow.util.SeatUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,15 +30,16 @@ public class RpaService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
-    private final AlertService alertService;
+    private final ApplicationEventPublisher eventPublisher;
     private final MovieRepository movieRepository;
     private final AtomicInteger activeJobCount = new AtomicInteger(0);
     private final AtomicBoolean initialCrawlRequested = new AtomicBoolean(false);
 
-    public RpaService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, AlertService alertService, MovieRepository movieRepository) {
+    public RpaService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+                      ApplicationEventPublisher eventPublisher, MovieRepository movieRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
-        this.alertService = alertService;
+        this.eventPublisher = eventPublisher;
         this.movieRepository = movieRepository;
     }
 
@@ -113,9 +119,11 @@ public class RpaService {
             String title = (String) data.get("title");
             String theaterName = (String) data.get("theater_name");
             String startTime = (String) data.get("start_time");
-            Integer goodSeats = toInteger(data.get("good_seats"), 0);
             Integer totalSeats = toInteger(data.get("total_seats"), defaultTotalSeats(theaterName));
-            List<List<Object>> availableSeats = (List<List<Object>>) data.get("available_seats");
+            List<List<?>> availableSeats = (List<List<?>>) data.get("available_seats");
+
+            Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, getSeatsPerRowByTheater(theaterName, totalSeats));
+            int computedGoodSeats = SeatUtils.countPremiumAvailableSeats(availableSeats, premiumSeatIds);
 
             String seatsJson;
             try {
@@ -130,16 +138,16 @@ public class RpaService {
             int updatedRows;
             if (failedTitle) {
                 updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, goodSeats, seatsJson, theaterName);
+                updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
             } else {
                 updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, goodSeats, seatsJson, theaterName);
+                updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
             }
 
             String logMsg;
             String logLevel;
             if (updatedRows > 0) {
-                logMsg = String.format("업데이트 성공: %s - %s / %s / 명당 %d석", theaterName, title, startTime, goodSeats);
+                logMsg = String.format("업데이트 성공: %s - %s / %s / 명당 %d석", theaterName, title, startTime, computedGoodSeats);
                 logLevel = "INFO";
                 log.info(logMsg);
 
@@ -148,7 +156,7 @@ public class RpaService {
                 if (movieId != null) {
                     MovieDto movie = movieRepository.findById(movieId);
                     if (movie != null) {
-                        alertService.sendUpdateAlert(movieId, movie);
+                        eventPublisher.publishEvent(new MovieUpdatedEvent(movieId, movie));
                     }
                 }
             } else {
@@ -172,6 +180,13 @@ public class RpaService {
 
     private Integer defaultTotalSeats(String theaterName) {
         return theaterName != null && theaterName.contains("롯데") ? 175 : 150;
+    }
+
+    private int getSeatsPerRowByTheater(String theaterName, int totalSeats) {
+        if (totalSeats > 200 || (theaterName != null && theaterName.contains("롯데"))) {
+            return 25;
+        }
+        return 15;
     }
 
     private void saveLogToDb(String message, String level) {

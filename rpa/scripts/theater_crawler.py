@@ -1,7 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from seat_logic import calculate_good_seats
+from seat_logic import calculate_good_seats, get_premium_seats
 import html
 import io
 import json
@@ -404,8 +404,10 @@ def crawl_theater_data():
                 schedule["remaining_seats"],
                 schedule["total_seats"],
             )
-            _, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
-            good_seats_count = calculate_good_seats(available_seats, seats_per_row)
+            rows, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
+            total_rows = len(rows)
+            premium_seats = get_premium_seats(total_rows, seats_per_row)
+            good_seats_count = calculate_good_seats(available_seats, premium_seats)
 
             results.append({
                 "theater_name": theater["name"],
