@@ -23,9 +23,6 @@ README.md
 HELP.md
 docs/
 
-# RPA (별도 서비스로 분리)
-rpa/
-
 # Test
 src/test/
 *.log
