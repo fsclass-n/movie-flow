@@ -1,5 +1,6 @@
-package com.onrender.movieflow.service;
-
+import com.onrender.movieflow.dto.MovieDto;
+import com.onrender.movieflow.repository.MovieRepository;
+import com.onrender.movieflow.service.AlertService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -24,12 +25,16 @@ public class RpaService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final AlertService alertService;
+    private final MovieRepository movieRepository;
     private final AtomicInteger activeJobCount = new AtomicInteger(0);
     private final AtomicBoolean initialCrawlRequested = new AtomicBoolean(false);
 
-    public RpaService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public RpaService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, AlertService alertService, MovieRepository movieRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.alertService = alertService;
+        this.movieRepository = movieRepository;
     }
 
     public int getActiveJobCount() {
@@ -137,6 +142,15 @@ public class RpaService {
                 logMsg = String.format("업데이트 성공: %s - %s / %s / 명당 %d석", theaterName, title, startTime, goodSeats);
                 logLevel = "INFO";
                 log.info(logMsg);
+
+                // 업데이트된 영화의 ID를 찾고 알림 메일 전송
+                Long movieId = jdbcTemplate.queryForObject("SELECT id FROM movies WHERE theater_name = ?", Long.class, theaterName);
+                if (movieId != null) {
+                    MovieDto movie = movieRepository.findById(movieId);
+                    if (movie != null) {
+                        alertService.sendUpdateAlert(movieId, movie);
+                    }
+                }
             } else {
                 logMsg = String.format("업데이트 대상 없음: %s - %s", theaterName, title);
                 logLevel = "WARN";

@@ -12,9 +12,6 @@ INSERT INTO movies (title, theater_name, start_time, total_seats, good_seats, de
 ('퓨리오사: 매드맥스 사가', '롯데시네마 건대', '2026-05-01 15:00', 175, 2, '고향으로 돌아가기 위한 퓨리오사의 여정', '/images/furiosa.jpg', '[["C",5],["D",8],["F",20]]'),
 ('원더랜드', '메가박스 코엑스', '2026-05-01 18:20', 150, 1, '다시 만나고 싶은 사람을 마주하는 이야기', '/images/wonderland.jpg', '[["E",6],["F",5],["G",6]]');
 
-INSERT INTO alerts (user_id, movie_id, email, status)
-VALUES (1, 1, 'admin@movieflow.com', 'WATCHING');
-
 INSERT INTO rpa_logs (log_level, message, created_at) VALUES
 ('INFO', '시스템이 정상적으로 시작되었습니다.', CURRENT_TIMESTAMP),
 ('INFO', 'CGV 강남 영화 정보를 업데이트했습니다.', CURRENT_TIMESTAMP),

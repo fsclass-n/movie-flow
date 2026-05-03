@@ -48,6 +48,7 @@ public class AlertService {
 
     private void sendAlertEmail(AlertDto alertDto) {
         try {
+            log.info("알림 이메일 전송 시도: {}", alertDto.getEmail());
             MovieDto movie = movieRepository.findById(alertDto.getMovieId());
             String movieTitle = movie != null ? movie.getTitle() : alertDto.getMovieId() + "번 영화";
             String theaterName = movie != null ? movie.getTheaterName() : "상영관 정보 없음";
@@ -116,5 +117,37 @@ public class AlertService {
         log.info("알림 삭제 요청 - ID: {}", id);
         alertRepository.deleteById(id);
         log.info("알림 삭제 완료 - ID: {}", id);
+    }
+
+    public void sendUpdateAlert(Long movieId, MovieDto movie) {
+        List<Map<String, Object>> watchingAlerts = alertRepository.findWatchingAlertsByMovieId(movieId);
+        for (Map<String, Object> alert : watchingAlerts) {
+            String email = (String) alert.get("email");
+            String phone = (String) alert.get("phone");
+            try {
+                log.info("좌석 업데이트 알림 메일 전송 시도: {}", email);
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setTo(email);
+                message.setSubject("Movie Flow - 좌석 업데이트 알림");
+                message.setText(
+                        "Movie Flow 좌석 정보가 업데이트되었습니다.\n\n" +
+                        "영화: " + movie.getTitle() + "\n" +
+                        "영화관: " + movie.getTheaterName() + "\n" +
+                        "상영 날짜/시간: " + movie.getStartTime() + "\n" +
+                        "현재 명당 잔여석: " + movie.getGoodSeats() + "석\n\n" +
+                        "좌석 정보를 확인해 보세요."
+                );
+                mailSender.send(message);
+                alertRepository.markAsSent(email, movieId);
+                log.info("좌석 업데이트 알림 메일 전송 완료: {}", email);
+            } catch (Exception e) {
+                log.error("좌석 업데이트 메일 전송 실패: {}", e.getMessage(), e);
+            }
+
+            // SMS 알림도 보낼 수 있음 (선택)
+            if (phone != null && !phone.isEmpty()) {
+                // SMS 로직 추가 가능
+            }
+        }
     }
 }

@@ -41,4 +41,9 @@ public class AlertRepository {
         String sql = "UPDATE alerts SET status = 'SENT' WHERE email = ? AND movie_id = ?";
         jdbcTemplate.update(sql, email, movieId);
     }
+
+    public List<Map<String, Object>> findWatchingAlertsByMovieId(Long movieId) {
+        String sql = "SELECT id, email, phone FROM alerts WHERE movie_id = ? AND status = 'WATCHING'";
+        return jdbcTemplate.queryForList(sql, movieId);
+    }
 }
