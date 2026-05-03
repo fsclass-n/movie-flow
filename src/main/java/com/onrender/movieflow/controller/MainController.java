@@ -2,44 +2,27 @@ package com.onrender.movieflow.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.onrender.movieflow.dto.AlertDto;
+import com.onrender.movieflow.dto.MovieDto;
 import com.onrender.movieflow.repository.AlertRepository;
 import com.onrender.movieflow.repository.MovieRepository;
-import com.onrender.movieflow.service.AlertService;
 import com.onrender.movieflow.service.RpaService;
 import com.onrender.movieflow.util.SeatUtils;
 import jakarta.servlet.http.HttpSession;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Controller
+@RequiredArgsConstructor
 public class MainController {
+
     private final MovieRepository movieRepository;
     private final AlertRepository alertRepository;
-    private final AlertService alertService;
     private final RpaService rpaService;
     private final ObjectMapper objectMapper;
-
-    public MainController(MovieRepository movieRepository, AlertRepository alertRepository, AlertService alertService,
-                          RpaService rpaService, ObjectMapper objectMapper) {
-        this.movieRepository = movieRepository;
-        this.alertRepository = alertRepository;
-        this.alertService = alertService;
-        this.rpaService = rpaService;
-        this.objectMapper = objectMapper;
-    }
 
     @ModelAttribute("activeBots")
     public int activeBots() {
@@ -51,7 +34,7 @@ public class MainController {
         boolean initialCrawlStarted = rpaService.runInitialCrawlIfNeeded();
         model.addAttribute("initialCrawlStarted", initialCrawlStarted);
 
-        List<com.onrender.movieflow.dto.MovieDto> movies = movieRepository.findAll();
+        List<MovieDto> movies = movieRepository.findAll();
         movies.forEach(this::refreshComputedGoodSeats);
         model.addAttribute("movies", movies);
         return "index";
@@ -59,15 +42,15 @@ public class MainController {
 
     @GetMapping("/api/movies")
     @ResponseBody
-    public java.util.List<com.onrender.movieflow.dto.MovieDto> fetchMovies() {
-        List<com.onrender.movieflow.dto.MovieDto> movies = movieRepository.findAll();
+    public List<MovieDto> fetchMovies() {
+        List<MovieDto> movies = movieRepository.findAll();
         movies.forEach(this::refreshComputedGoodSeats);
         return movies;
     }
 
     @GetMapping("/movie/detail/{id}")
     public String detail(@PathVariable("id") Long id, Model model) {
-        var movie = movieRepository.findById(id);
+        MovieDto movie = movieRepository.findById(id);
         List<String> goodSeats = new ArrayList<>();
         List<String> availableSeatIds = new ArrayList<>();
         List<String> premiumSeatIds = new ArrayList<>();
@@ -82,8 +65,7 @@ public class MainController {
         int displayedGoodSeatCount = 0;
         if (movie != null && movie.getAvailableSeats() != null) {
             try {
-                List<List<?>> seats = objectMapper.readValue(movie.getAvailableSeats(), new TypeReference<List<List<?>>>() {
-                });
+                List<List<?>> seats = objectMapper.readValue(movie.getAvailableSeats(), new TypeReference<List<List<?>>>() {});
                 for (List<?> seat : seats) {
                     if (seat.size() == 2) {
                         String row = seat.get(0).toString();
@@ -107,6 +89,7 @@ public class MainController {
         if (movie != null) {
             movie.setGoodSeats(displayedGoodSeatCount);
         }
+
         model.addAttribute("goodSeats", goodSeats);
         model.addAttribute("displayGoodSeatCount", displayedGoodSeatCount);
         model.addAttribute("availableSeatIds", availableSeatIds);
@@ -137,40 +120,10 @@ public class MainController {
         return "mypage";
     }
 
-    @PostMapping("/alert/setup")
-    public String setupAlert(@ModelAttribute AlertDto alertDto, HttpSession session) {
-        String currentUserEmail = (String) session.getAttribute("userEmail");
-        if (currentUserEmail == null || currentUserEmail.isEmpty()) {
-            currentUserEmail = alertDto.getEmail();
-            session.setAttribute("userEmail", currentUserEmail);
-        }
-        session.setAttribute("alertCreated", true);
-        alertDto.setUserEmail(currentUserEmail);
-        alertService.createAlert(alertDto);
-        return "redirect:/mypage";
-    }
+    // --- Private Helper Methods (동작 유지) ---
 
-    @PostMapping("/alert/cancel")
-    public String cancelAlert(@RequestParam("id") Long id) {
-        alertService.deleteAlert(id);
-        return "redirect:/mypage";
-    }
-
-    private boolean isPremiumSeat(String row, String col, int seatsPerRow) {
-        try {
-            int seatNumber = Integer.parseInt(col);
-            return List.of("C", "D", "E").contains(row)
-                    && seatNumber >= premiumStart(seatsPerRow)
-                    && seatNumber <= premiumEnd(seatsPerRow);
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
-    private void refreshComputedGoodSeats(com.onrender.movieflow.dto.MovieDto movie) {
-        if (movie == null) {
-            return;
-        }
+    private void refreshComputedGoodSeats(MovieDto movie) {
+        if (movie == null) return;
         int totalSeats = getTotalSeats(movie);
         int seatsPerRow = getSeatsPerRow(movie, totalSeats);
         Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
@@ -180,18 +133,13 @@ public class MainController {
     }
 
     private List<String> parseAvailableSeatIds(String availableSeatsJson) {
-        if (availableSeatsJson == null || availableSeatsJson.isBlank()) {
-            return List.of();
-        }
+        if (availableSeatsJson == null || availableSeatsJson.isBlank()) return List.of();
         try {
-            List<List<?>> seats = objectMapper.readValue(availableSeatsJson, new TypeReference<List<List<?>>>() {
-            });
+            List<List<?>> seats = objectMapper.readValue(availableSeatsJson, new TypeReference<List<List<?>>>() {});
             List<String> seatIds = new ArrayList<>();
             for (List<?> seat : seats) {
                 if (seat.size() == 2) {
-                    String row = seat.get(0).toString();
-                    String col = seat.get(1).toString();
-                    seatIds.add(row + col);
+                    seatIds.add(seat.get(0).toString() + seat.get(1).toString());
                 }
             }
             return seatIds;
@@ -200,25 +148,19 @@ public class MainController {
         }
     }
 
-    private Set<String> getPremiumSeatIds(int totalSeats, int seatsPerRow) {
-        return SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
-    }
-
-    private boolean isLotteTheater(com.onrender.movieflow.dto.MovieDto movie) {
+    private boolean isLotteTheater(MovieDto movie) {
         return movie != null && movie.getTheaterName() != null && movie.getTheaterName().contains("롯데");
     }
 
-    private int getTotalSeats(com.onrender.movieflow.dto.MovieDto movie) {
+    private int getTotalSeats(MovieDto movie) {
         if (movie != null && movie.getTotalSeats() != null && movie.getTotalSeats() > 0) {
             return movie.getTotalSeats();
         }
         return isLotteTheater(movie) ? 175 : 150;
     }
 
-    private int getSeatsPerRow(com.onrender.movieflow.dto.MovieDto movie, int totalSeats) {
-        if (totalSeats > 200 || isLotteTheater(movie)) {
-            return 25;
-        }
+    private int getSeatsPerRow(MovieDto movie, int totalSeats) {
+        if (totalSeats > 200 || isLotteTheater(movie)) return 25;
         return 15;
     }
 
@@ -229,13 +171,5 @@ public class MainController {
             rows.add(String.valueOf((char) ('A' + index)));
         }
         return rows;
-    }
-
-    private int premiumStart(int seatsPerRow) {
-        return Math.max(1, Math.round((seatsPerRow + 1) / 2.0f - 2));
-    }
-
-    private int premiumEnd(int seatsPerRow) {
-        return Math.min(seatsPerRow, Math.round((seatsPerRow + 1) / 2.0f + 3));
     }
 }
