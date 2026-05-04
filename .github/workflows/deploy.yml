@@ -3,7 +3,7 @@ name: Deploy movie-flow to AWS EC2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 수동 실행 버튼 활성화
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: movieflow:latest
@@ -42,8 +42,9 @@ jobs:
       - name: Export Docker image to tar
         run: |
           docker save ${{ env.IMAGE_NAME }} -o movieflow-image.tar
+          # 핵심 수정 사항: 파일 권한을 644로 변경하여 SCP 액션이 읽을 수 있게 함
+          sudo chmod 644 movieflow-image.tar
 
-      # 1. SCP를 사용하여 EC2로 tar 파일 전송
       - name: Copy image to EC2 host
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -53,8 +54,9 @@ jobs:
           port: ${{ secrets.EC2_SSH_PORT || 22 }}
           source: "movieflow-image.tar"
           target: "/tmp"
+          timeout: 60s      # 대용량 파일 전송을 위해 타임아웃 연장
+          command_timeout: 15m
 
-      # 2. SSH로 접속하여 Docker 컨테이너 교체 실행
       - name: Deploy Docker container on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -63,25 +65,22 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT || 22 }}
           script: |
-            # 기존 컨테이너 중지 및 삭제
+            # 1. 기존 컨테이너 및 이미지 정리
             sudo docker stop ${{ env.REMOTE_CONTAINER_NAME }} || true
             sudo docker rm ${{ env.REMOTE_CONTAINER_NAME }} || true
-            
-            # 이전 이미지 삭제 (용량 관리)
             sudo docker rmi ${{ env.IMAGE_NAME }} || true
             
-            # 이미지 로드
+            # 2. 새 이미지 로드 및 실행
             sudo docker load -i ${{ env.REMOTE_IMAGE_PATH }}
-            
-            # 컨테이너 실행
             sudo docker run -d \
               --name ${{ env.REMOTE_CONTAINER_NAME }} \
               --restart unless-stopped \
               -p ${{ env.REMOTE_PORT }}:${{ env.REMOTE_PORT }} \
               ${{ env.IMAGE_NAME }}
             
-            # 사용이 끝난 tar 파일 삭제
+            # 3. 정리 작업
             sudo rm -f ${{ env.REMOTE_IMAGE_PATH }}
+            sudo docker image prune -f
 
       - name: Deployment Summary
         if: always()
