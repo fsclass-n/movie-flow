@@ -3,11 +3,6 @@ name: Deploy movie-flow to AWS EC2
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # 수동 실행 버튼 활성화
-
-env:
-  IMAGE_NAME: movieflow:latest
-  REMOTE_CONTAINER_NAME: movie-flow
 
 jobs:
   build-and-deploy:
@@ -16,15 +11,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Docker Hub 로그인 (이미지 저장소 사용)
+      # 1. Docker Hub 로그인
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 2. 이미지 빌드 및 푸시
-      # 멀티 스테이지 빌드이므로 여기서 바로 jar까지 생성됩니다.
+      # 2. 멀티 스테이지 방식 이미지 빌드 및 푸시
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -32,27 +26,29 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/movie-flow:latest
 
-      # 3. EC2 접속 및 배포
+      # 3. EC2 접속 및 배포 (SSH 인증 오류 방지 로직)
       - name: SSH Remote Deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }} # 혹은 ubuntu
+          username: ${{ secrets.EC2_USER }} # Ubuntu: ubuntu / Amazon Linux: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          port: 22
           script: |
-            # 기존 컨테이너 정리
-            sudo docker stop ${{ env.REMOTE_CONTAINER_NAME }} 2>/dev/null || true
-            sudo docker rm ${{ env.REMOTE_CONTAINER_NAME }} 2>/dev/null || true
+            # 1. 기존 컨테이너 중지 및 삭제
+            sudo docker stop movie-flow 2>/dev/null || true
+            sudo docker rm movie-flow 2>/dev/null || true
             sudo docker image rm ${{ secrets.DOCKERHUB_USERNAME }}/movie-flow:latest 2>/dev/null || true
             
-            # 새 이미지 Pull 및 실행 (80포트로 접속하면 내부 8080으로 연결)
+            # 2. Docker Hub에서 새 이미지 가져오기
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/movie-flow:latest
+            
+            # 3. 새 컨테이너 실행 (80포트 외부 개방)
             sudo docker run -d \
-              --name ${{ env.REMOTE_CONTAINER_NAME }} \
+              --name movie-flow \
               --restart unless-stopped \
               -p 80:8080 \
               ${{ secrets.DOCKERHUB_USERNAME }}/movie-flow:latest
             
-            # 안 쓰는 이미지 정리
+            # 4. 불필요한 이미지 정리
             sudo docker image prune -f
