@@ -3,7 +3,6 @@ name: Deploy movie-flow to AWS EC2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 env:
   IMAGE_NAME: movieflow:latest
@@ -30,10 +29,16 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Spring Boot application
-        run: ./gradlew clean build -x test --no-daemon
+        # plain jar 생성을 방지하여 파일을 하나만 남깁니다.
+        run: ./gradlew clean build -x test
 
-      # 핵심 추가: 빌드된 jar 파일을 Dockerfile이 있는 곳으로 복사 (중요!)
-      - name: Prepare Jar file for Docker
+      - name: Check build directory
+        # 디버깅용: 파일이 제대로 생성되었는지 확인합니다.
+        run: ls -l build/libs/
+
+      - name: Prepare Jar file
+        # 빌드된 jar 파일을 최상위 폴더로 복사합니다. 
+        # (파일명이 무엇이든 하나만 복사되도록 처리)
         run: cp build/libs/*.jar ./app.jar
 
       - name: Set up Docker Buildx
@@ -46,7 +51,6 @@ jobs:
       - name: Export Docker image to tar
         run: |
           docker save ${{ env.IMAGE_NAME }} -o movieflow-image.tar
-          sudo chmod 644 movieflow-image.tar
 
       - name: Copy image to EC2 host
         uses: appleboy/scp-action@v0.1.7
@@ -58,7 +62,6 @@ jobs:
           source: "movieflow-image.tar"
           target: "/tmp"
           timeout: 60s
-          command_timeout: 15m
 
       - name: Deploy Docker container on EC2
         uses: appleboy/ssh-action@v1.0.3
