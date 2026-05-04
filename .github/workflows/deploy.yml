@@ -3,7 +3,7 @@ name: Deploy movie-flow to AWS EC2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 env:
   IMAGE_NAME: movieflow:latest
@@ -14,9 +14,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,41 +37,51 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build --tag $IMAGE_NAME .
+          docker build --tag ${{ env.IMAGE_NAME }} .
 
       - name: Export Docker image to tar
         run: |
-          docker save $IMAGE_NAME -o movieflow-image.tar
+          docker save ${{ env.IMAGE_NAME }} -o movieflow-image.tar
 
-      - name: Prepare SSH key
-        run: |
-          mkdir -p ~/.ssh
-          cat <<'EOF' > ec2_deploy_key.pem
-          ${{ secrets.EC2_SSH_KEY }}
-          EOF
-          chmod 600 ec2_deploy_key.pem
-
+      # 1. SCP를 사용하여 EC2로 tar 파일 전송
       - name: Copy image to EC2 host
-        run: |
-          PORT="${{ secrets.EC2_SSH_PORT }}"
-          if [ -z "$PORT" ]; then
-            PORT=22
-          fi
-          scp -i ec2_deploy_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P "$PORT" movieflow-image.tar "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:$REMOTE_IMAGE_PATH"
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          source: "movieflow-image.tar"
+          target: "/tmp"
 
+      # 2. SSH로 접속하여 Docker 컨테이너 교체 실행
       - name: Deploy Docker container on EC2
-        run: |
-          PORT="${{ secrets.EC2_SSH_PORT }}"
-          if [ -z "$PORT" ]; then
-            PORT=22
-          fi
-          ssh -i ec2_deploy_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$PORT" "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" <<'EOF'
-            sudo docker load -i $REMOTE_IMAGE_PATH
-            sudo docker stop $REMOTE_CONTAINER_NAME || true
-            sudo docker rm $REMOTE_CONTAINER_NAME || true
-            sudo docker run -d --name $REMOTE_CONTAINER_NAME --restart unless-stopped -p $REMOTE_PORT:$REMOTE_PORT $IMAGE_NAME
-            sudo rm -f $REMOTE_IMAGE_PATH
-          EOF
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          script: |
+            # 기존 컨테이너 중지 및 삭제
+            sudo docker stop ${{ env.REMOTE_CONTAINER_NAME }} || true
+            sudo docker rm ${{ env.REMOTE_CONTAINER_NAME }} || true
+            
+            # 이전 이미지 삭제 (용량 관리)
+            sudo docker rmi ${{ env.IMAGE_NAME }} || true
+            
+            # 이미지 로드
+            sudo docker load -i ${{ env.REMOTE_IMAGE_PATH }}
+            
+            # 컨테이너 실행
+            sudo docker run -d \
+              --name ${{ env.REMOTE_CONTAINER_NAME }} \
+              --restart unless-stopped \
+              -p ${{ env.REMOTE_PORT }}:${{ env.REMOTE_PORT }} \
+              ${{ env.IMAGE_NAME }}
+            
+            # 사용이 끝난 tar 파일 삭제
+            sudo rm -f ${{ env.REMOTE_IMAGE_PATH }}
 
       - name: Deployment Summary
         if: always()
@@ -81,5 +89,4 @@ jobs:
           echo "📊 Deployment Summary"
           echo "===================="
           echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
           echo "Status: ${{ job.status }}"
