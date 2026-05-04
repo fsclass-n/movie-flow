@@ -29,17 +29,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Spring Boot application
-        # plain jar 생성을 방지하여 파일을 하나만 남깁니다.
+        # plain jar 생성을 방지하고 빌드합니다.
         run: ./gradlew clean build -x test
 
-      - name: Check build directory
-        # 디버깅용: 파일이 제대로 생성되었는지 확인합니다.
-        run: ls -l build/libs/
-
       - name: Prepare Jar file
-        # 빌드된 jar 파일을 최상위 폴더로 복사합니다. 
-        # (파일명이 무엇이든 하나만 복사되도록 처리)
-        run: cp build/libs/*.jar ./app.jar
+        # 중요: build/libs 폴더 안의 snapshot jar 하나만 app.jar라는 이름으로 루트에 복사합니다.
+        # target 위치에 /를 붙이지 않아 파일로 생성되게 합니다.
+        run: find build/libs/ -name "*-SNAPSHOT.jar" -exec cp {} app.jar \;
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
