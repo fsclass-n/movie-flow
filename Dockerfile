@@ -1,20 +1,27 @@
-# 1. 빌드 및 실행 환경 설정
-FROM amazoncorretto:21-al2-full
-
-# 2. 작업 디렉토리 생성
+# --- 1단계: 빌드 스테이지 ---
+FROM gradle:8.5-jdk21 AS build
 WORKDIR /app
 
-# 3. 환경 변수 설정
-ENV TZ=Asia/Seoul
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+# Gradle 빌드에 필요한 파일들 복사
+COPY build.gradle settings.gradle ./
+COPY src ./src
 
-# 4. 시스템 패키지 및 RPA 연동을 위한 Python 설치
+# 실행 가능한 jar 파일 빌드 (테스트 제외)
+RUN gradle clean build -x test --no-daemon
+
+# --- 2단계: 실행 스테이지 ---
+FROM amazoncorretto:21-al2-full
+WORKDIR /app
+
+# 1단계에서 빌드된 jar 파일만 쏙 가져오기 (가장 확실한 경로)
+COPY --from=build /app/build/libs/*.jar app.jar
+
+# 시스템 패키지 및 RPA를 위한 Python 설치
 RUN yum update -y && \
     yum install -y python3 python3-pip tzdata && \
     yum clean all
 
-# 5. Python 의존성 설치
-# requirements.txt가 있으면 사용하고, 없으면 자주 쓰이는 라이브러리 직접 설치
+# Python 의존성 설치
 COPY requirements.txt* ./
 RUN if [ -f requirements.txt ]; then \
         pip3 install --no-cache-dir -r requirements.txt; \
@@ -22,11 +29,11 @@ RUN if [ -f requirements.txt ]; then \
         pip3 install python-dotenv requests selenium webdriver-manager; \
     fi
 
-# 6. 애플리케이션 파일 복사
-# deploy.yml에서 루트 폴더로 가져온 app.jar를 복사합니다.
-COPY app.jar app.jar
+# RPA 스크립트 복사
 COPY rpa ./rpa
 
-# 7. 실행 설정
+ENV TZ=Asia/Seoul
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
 EXPOSE 8080
+
 ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
