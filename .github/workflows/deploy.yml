@@ -30,6 +30,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Spring Boot application
+        # 외부에서 빌드를 수행하여 Docker 빌드 시간을 단축함
         run: ./gradlew clean build -x test --no-daemon
 
       - name: Set up Docker Buildx
@@ -42,7 +43,7 @@ jobs:
       - name: Export Docker image to tar
         run: |
           docker save ${{ env.IMAGE_NAME }} -o movieflow-image.tar
-          # 핵심 수정 사항: 파일 권한을 644로 변경하여 SCP 액션이 읽을 수 있게 함
+          # SCP 액션의 읽기 권한 문제 해결
           sudo chmod 644 movieflow-image.tar
 
       - name: Copy image to EC2 host
@@ -54,7 +55,7 @@ jobs:
           port: ${{ secrets.EC2_SSH_PORT || 22 }}
           source: "movieflow-image.tar"
           target: "/tmp"
-          timeout: 60s      # 대용량 파일 전송을 위해 타임아웃 연장
+          timeout: 60s
           command_timeout: 15m
 
       - name: Deploy Docker container on EC2
@@ -65,12 +66,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT || 22 }}
           script: |
-            # 1. 기존 컨테이너 및 이미지 정리
-            sudo docker stop ${{ env.REMOTE_CONTAINER_NAME }} || true
-            sudo docker rm ${{ env.REMOTE_CONTAINER_NAME }} || true
-            sudo docker rmi ${{ env.IMAGE_NAME }} || true
+            # 1. 기존 리소스 정리 (에러 무시)
+            sudo docker stop ${{ env.REMOTE_CONTAINER_NAME }} 2>/dev/null || true
+            sudo docker rm ${{ env.REMOTE_CONTAINER_NAME }} 2>/dev/null || true
+            sudo docker rmi ${{ env.IMAGE_NAME }} 2>/dev/null || true
             
-            # 2. 새 이미지 로드 및 실행
+            # 2. 새 이미지 로드 및 컨테이너 실행
             sudo docker load -i ${{ env.REMOTE_IMAGE_PATH }}
             sudo docker run -d \
               --name ${{ env.REMOTE_CONTAINER_NAME }} \
@@ -78,7 +79,7 @@ jobs:
               -p ${{ env.REMOTE_PORT }}:${{ env.REMOTE_PORT }} \
               ${{ env.IMAGE_NAME }}
             
-            # 3. 정리 작업
+            # 3. 임시 파일 삭제 및 미사용 이미지 정리
             sudo rm -f ${{ env.REMOTE_IMAGE_PATH }}
             sudo docker image prune -f
 
@@ -87,5 +88,6 @@ jobs:
         run: |
           echo "📊 Deployment Summary"
           echo "===================="
-          echo "Branch: ${{ github.ref_name }}"
           echo "Status: ${{ job.status }}"
+          echo "Target Host: ${{ secrets.EC2_HOST }}"
+          echo "User: ${{ secrets.EC2_USER }}"
