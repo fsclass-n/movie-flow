@@ -16,18 +16,19 @@ WORKDIR /app
 # 빌드 결과물 복사
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# RPA 실행을 위한 Python, Chromium, ChromeDriver 및 타임존 설정
+# RPA 실행을 위한 Python, 타임존 설정
 ENV TZ=Asia/Seoul
 RUN yum update -y && \
-    yum install -y python3 python3-pip tzdata chromium && \
-    yum clean all
+    yum install -y python3 python3-pip tzdata && \
+    yum clean all && \
+    ln -sf /usr/bin/python3 /usr/bin/python
 
 # Python 라이브러리 설치
 COPY requirements.txt* ./
 RUN if [ -f requirements.txt ]; then \
         pip3 install --no-cache-dir -r requirements.txt; \
     else \
-        pip3 install python-dotenv requests selenium webdriver-manager; \
+        pip3 install python-dotenv beautifulsoup4; \
     fi
 
 COPY rpa ./rpa
