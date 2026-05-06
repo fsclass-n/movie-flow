@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from seat_logic import calculate_good_seats, get_premium_seats
+from bs4 import BeautifulSoup
 import html
 import io
 import json
@@ -265,6 +266,19 @@ def find_child_text(element, selectors):
     return None
 
 
+def find_child_text_soup(element, selectors):
+    for selector in selectors:
+        try:
+            children = element.select(selector)
+            for child in children:
+                text = normalize_text(child.get_text() or child.get('title') or child.get('alt'))
+                if is_valid_title(text):
+                    return clean_movie_title(text)
+        except Exception:
+            continue
+    return None
+
+
 def crawl_cgv_schedule(driver, theater):
     schedules = []
     for play_date in date_candidates():
@@ -273,17 +287,19 @@ def crawl_cgv_schedule(driver, theater):
         driver.get(url)
         time.sleep(3)
 
-        for block in driver.find_elements(By.CSS_SELECTOR, ".col-times, .sect-showtimes"):
-            title = find_child_text(block, [".info-movie a strong", ".info-movie strong", "strong.title", ".title"])
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        for block in soup.select(".col-times, .sect-showtimes"):
+            title = find_child_text_soup(block, [".info-movie a strong", ".info-movie strong", "strong.title", ".title"])
             if not title:
                 continue
-            halls = block.find_elements(By.CSS_SELECTOR, ".type-hall") or [block]
+            halls = block.select(".type-hall") or [block]
             for hall in halls:
-                hall_text = normalize_text(hall.text)
+                hall_text = normalize_text(hall.get_text())
                 total_seats = parse_cgv_total(hall_text)
-                links = hall.find_elements(By.CSS_SELECTOR, ".info-timetable li a, li a")
+                links = hall.select(".info-timetable li a, li a")
                 for link in links:
-                    link_text = normalize_text(link.text)
+                    link_text = normalize_text(link.get_text())
                     time_match = re.search(r"([0-2]?\d):[0-5]\d", link_text)
                     remaining = parse_cgv_remaining(link_text)
                     if time_match and remaining is not None:
@@ -368,6 +384,14 @@ def crawl_theater_data():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1366,1200")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-plugins")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--disable-default-apps")
+    opts.add_argument("--disable-background-timer-throttling")
+    opts.add_argument("--disable-renderer-backgrounding")
+    opts.add_argument("--disable-backgrounding-occluded-windows")
     opts.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

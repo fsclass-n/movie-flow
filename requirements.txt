@@ -3,6 +3,7 @@ python-dotenv
 
 # 웹 크롤링 및 자동화
 selenium
+beautifulsoup4
 
 # 브라우저 드라이버 자동 관리 (선택 사항이지만 배포 시 권장)
 webdriver-manager
