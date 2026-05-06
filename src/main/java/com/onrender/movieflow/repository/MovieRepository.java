@@ -15,6 +15,7 @@ public class MovieRepository {
         this.jdbcTemplate = jdbcTemplate; 
     }
 
+
     public List<MovieDto> findAll() {
         // 람다식을 메서드 인자에 바로 넣습니다.
         return jdbcTemplate.query("SELECT * FROM movies ORDER BY id", (rs, rowNum) -> {
