@@ -1,25 +1,15 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
 from seat_logic import calculate_good_seats, get_premium_seats
 from bs4 import BeautifulSoup
 import html
 import io
 import json
 import math
-import os
 import random
 import re
 import sys
-import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
-
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 
 sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding="utf-8")
 sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding="utf-8")
@@ -260,18 +250,6 @@ def parse_cgv_total(text):
     return to_int(match.group(1)) if match else 0
 
 
-def find_child_text(element, selectors):
-    for selector in selectors:
-        try:
-            for child in element.find_elements(By.CSS_SELECTOR, selector):
-                text = normalize_text(child.text or child.get_attribute("title") or child.get_attribute("alt"))
-                if is_valid_title(text):
-                    return clean_movie_title(text)
-        except Exception:
-            continue
-    return None
-
-
 def find_child_text_soup(element, selectors):
     for selector in selectors:
         try:
@@ -285,88 +263,31 @@ def find_child_text_soup(element, selectors):
     return None
 
 
-def get_chrome_binary_path():
-    candidates = [
-        os.environ.get("CHROME_BINARY"),
-        os.environ.get("GOOGLE_CHROME_SHIM"),
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-    ]
-    for path in candidates:
-        if path and os.path.exists(path):
-            return path
-    return None
+def fetch_html(url):
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.cgv.co.kr/",
+    }
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return response.read().decode("utf-8")
 
 
-def configure_chrome_options(opts):
-    opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--window-size=1366,1200")
-    opts.add_argument("--disable-gpu")
-    opts.add_argument("--disable-extensions")
-    opts.add_argument("--disable-plugins")
-    opts.add_argument("--no-first-run")
-    opts.add_argument("--disable-default-apps")
-    opts.add_argument("--disable-background-timer-throttling")
-    opts.add_argument("--disable-renderer-backgrounding")
-    opts.add_argument("--disable-backgrounding-occluded-windows")
-    opts.add_argument("--disable-software-rasterizer")
-    opts.add_argument("--disable-blink-features=AutomationControlled")
-    opts.add_argument("--disable-infobars")
-    opts.add_argument("--disable-features=VizDisplayCompositor")
-    opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-    opts.add_experimental_option("useAutomationExtension", False)
-    opts.add_experimental_option("prefs", {
-        "profile.default_content_setting_values.images": 2,
-        "profile.managed_default_content_settings.images": 2,
-        "profile.default_content_setting_values.notifications": 2,
-    })
-    user_agent = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    opts.add_argument(f"--user-agent={user_agent}")
-    binary_path = get_chrome_binary_path()
-    if binary_path:
-        opts.binary_location = binary_path
-
-
-def create_chrome_driver(opts):
-    service = Service(ChromeDriverManager(log_level=0).install())
-    driver = webdriver.Chrome(service=service, options=opts)
-
-    try:
-        driver.execute_cdp_cmd(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {
-                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-            },
-        )
-    except Exception:
-        pass
-
-    return driver
-
-
-def crawl_cgv_schedule(driver, theater):
+def crawl_cgv_schedule(theater):
     schedules = []
     for play_date in date_candidates():
         play_de = play_date.strftime("%Y%m%d")
         url = f"https://www.cgv.co.kr/common/showtimes/iframeTheater.aspx?theatercode={theater['theater_code']}&date={play_de}"
-        driver.get(url)
-
         try:
-            wait = WebDriverWait(driver, 10)
-            wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".col-times, .sect-showtimes"))
-            )
+            html_text = fetch_html(url)
         except Exception:
-            time.sleep(2)
-
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+            continue
+        soup = BeautifulSoup(html_text, 'html.parser')
 
         for block in soup.select(".col-times, .sect-showtimes"):
             title = find_child_text_soup(block, [".info-movie a strong", ".info-movie strong", "strong.title", ".title"])
@@ -458,62 +379,52 @@ def fallback_schedule(theater):
 
 
 def crawl_theater_data():
-    opts = Options()
-    configure_chrome_options(opts)
-
     theaters = [
         {"name": "CGV 강남", "crawler": "cgv", "theater_code": "0056", "fallback_total_seats": 150},
         {"name": "롯데시네마 건대", "crawler": "lotte", "cinema_id": "1|0001|1004", "fallback_total_seats": 175},
         {"name": "메가박스 코엑스", "crawler": "megabox", "brch_no": "1351", "fallback_total_seats": 150},
     ]
 
-    driver = None
     results = []
 
-    try:
-        for index, theater in enumerate(theaters):
-            try:
-                if theater["crawler"] == "lotte":
-                    schedule = crawl_lotte_schedule(theater)
-                elif theater["crawler"] == "megabox":
-                    schedule = crawl_megabox_schedule(theater)
-                else:
-                    if driver is None:
-                        driver = create_chrome_driver(opts)
-                    schedule = crawl_cgv_schedule(driver, theater)
-                if not schedule:
-                    raise RuntimeError("No schedule found")
-            except Exception as error:
-                print(f"{theater['name']} crawl failed: {error}", file=sys.stderr)
-                schedule = fallback_schedule(theater)
+    for index, theater in enumerate(theaters):
+        try:
+            if theater["crawler"] == "lotte":
+                schedule = crawl_lotte_schedule(theater)
+            elif theater["crawler"] == "megabox":
+                schedule = crawl_megabox_schedule(theater)
+            else:
+                schedule = crawl_cgv_schedule(theater)
+            if not schedule:
+                raise RuntimeError("No schedule found")
+        except Exception as error:
+            print(f"{theater['name']} crawl failed: {error}", file=sys.stderr)
+            schedule = fallback_schedule(theater)
 
-            available_seats = build_available_seats(
-                theater["name"],
-                schedule["remaining_seats"],
-                schedule["total_seats"],
-            )
-            rows, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
-            total_rows = len(rows)
-            premium_seats = get_premium_seats(total_rows, seats_per_row)
-            good_seats_count = calculate_good_seats(available_seats, premium_seats)
+        available_seats = build_available_seats(
+            theater["name"],
+            schedule["remaining_seats"],
+            schedule["total_seats"],
+        )
+        rows, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
+        total_rows = len(rows)
+        premium_seats = get_premium_seats(total_rows, seats_per_row)
+        good_seats_count = calculate_good_seats(available_seats, premium_seats)
 
-            results.append({
-                "theater_name": theater["name"],
-                "title": schedule["title"],
-                "showing_date": schedule["showing_date"],
-                "showing_time": schedule["showing_time"],
-                "start_time": f"{schedule['showing_date']} {schedule['showing_time']}",
-                "remaining_seats": schedule["remaining_seats"],
-                "total_seats": schedule["total_seats"],
-                "good_seats": good_seats_count,
-                "available_seats": available_seats,
-                "crawled_at": (datetime.now() + timedelta(seconds=index)).strftime("%Y-%m-%d %H:%M:%S"),
-            })
+        results.append({
+            "theater_name": theater["name"],
+            "title": schedule["title"],
+            "showing_date": schedule["showing_date"],
+            "showing_time": schedule["showing_time"],
+            "start_time": f"{schedule['showing_date']} {schedule['showing_time']}",
+            "remaining_seats": schedule["remaining_seats"],
+            "total_seats": schedule["total_seats"],
+            "good_seats": good_seats_count,
+            "available_seats": available_seats,
+            "crawled_at": (datetime.now() + timedelta(seconds=index)).strftime("%Y-%m-%d %H:%M:%S"),
+        })
 
-        print(json.dumps(results, ensure_ascii=False))
-    finally:
-        if driver is not None:
-            driver.quit()
+    print(json.dumps(results, ensure_ascii=False))
 
 
 if __name__ == "__main__":
