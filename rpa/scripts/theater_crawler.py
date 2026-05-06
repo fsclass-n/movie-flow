@@ -7,6 +7,7 @@ import html
 import io
 import json
 import math
+import os
 import random
 import re
 import sys
@@ -14,6 +15,11 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
+
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding="utf-8")
 sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding="utf-8")
@@ -279,13 +285,86 @@ def find_child_text_soup(element, selectors):
     return None
 
 
+def get_chrome_binary_path():
+    candidates = [
+        os.environ.get("CHROME_BINARY"),
+        os.environ.get("GOOGLE_CHROME_SHIM"),
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+def configure_chrome_options(opts):
+    opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1366,1200")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-plugins")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--disable-default-apps")
+    opts.add_argument("--disable-background-timer-throttling")
+    opts.add_argument("--disable-renderer-backgrounding")
+    opts.add_argument("--disable-backgrounding-occluded-windows")
+    opts.add_argument("--disable-software-rasterizer")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_argument("--disable-infobars")
+    opts.add_argument("--disable-features=VizDisplayCompositor")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+    opts.add_experimental_option("useAutomationExtension", False)
+    opts.add_experimental_option("prefs", {
+        "profile.default_content_setting_values.images": 2,
+        "profile.managed_default_content_settings.images": 2,
+        "profile.default_content_setting_values.notifications": 2,
+    })
+    user_agent = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    opts.add_argument(f"--user-agent={user_agent}")
+    binary_path = get_chrome_binary_path()
+    if binary_path:
+        opts.binary_location = binary_path
+
+
+def create_chrome_driver(opts):
+    service = Service(ChromeDriverManager(log_level=0).install())
+    driver = webdriver.Chrome(service=service, options=opts)
+
+    try:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            },
+        )
+    except Exception:
+        pass
+
+    return driver
+
+
 def crawl_cgv_schedule(driver, theater):
     schedules = []
     for play_date in date_candidates():
         play_de = play_date.strftime("%Y%m%d")
         url = f"https://www.cgv.co.kr/common/showtimes/iframeTheater.aspx?theatercode={theater['theater_code']}&date={play_de}"
         driver.get(url)
-        time.sleep(3)
+
+        try:
+            wait = WebDriverWait(driver, 10)
+            wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".col-times, .sect-showtimes"))
+            )
+        except Exception:
+            time.sleep(2)
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
@@ -380,22 +459,7 @@ def fallback_schedule(theater):
 
 def crawl_theater_data():
     opts = Options()
-    opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--window-size=1366,1200")
-    opts.add_argument("--disable-gpu")
-    opts.add_argument("--disable-extensions")
-    opts.add_argument("--disable-plugins")
-    opts.add_argument("--no-first-run")
-    opts.add_argument("--disable-default-apps")
-    opts.add_argument("--disable-background-timer-throttling")
-    opts.add_argument("--disable-renderer-backgrounding")
-    opts.add_argument("--disable-backgrounding-occluded-windows")
-    opts.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
+    configure_chrome_options(opts)
 
     theaters = [
         {"name": "CGV 강남", "crawler": "cgv", "theater_code": "0056", "fallback_total_seats": 150},
@@ -415,7 +479,7 @@ def crawl_theater_data():
                     schedule = crawl_megabox_schedule(theater)
                 else:
                     if driver is None:
-                        driver = webdriver.Chrome(options=opts)
+                        driver = create_chrome_driver(opts)
                     schedule = crawl_cgv_schedule(driver, theater)
                 if not schedule:
                     raise RuntimeError("No schedule found")
