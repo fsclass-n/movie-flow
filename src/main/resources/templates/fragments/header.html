@@ -38,8 +38,13 @@
                     if (!dot || !text) {
                         return;
                     }
-                    dot.classList.toggle('active', active);
-                    dot.classList.toggle('inactive', !active);
+                    if (active) {
+                        dot.classList.add('active');
+                        dot.classList.remove('inactive');
+                    } else {
+                        dot.classList.remove('active');
+                        dot.classList.add('inactive');
+                    }
                     text.textContent = active ? 'RPA Engine Active' : 'RPA Engine Inactive';
                 }
 

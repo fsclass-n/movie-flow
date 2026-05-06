@@ -44,7 +44,7 @@ body {
 }
 
 .rpa-status-dot.active {
-    background-color: #10b981;
+    background-color: #10b981 !important;
     box-shadow: 0 0 10px #10b981;
     animation: blink 1.5s infinite;
 }
