@@ -1,3 +1,4 @@
+# rpa/scripts/seat_logic.py
 def get_premium_seats(total_rows, seats_per_row):
     """
     전체 좌석의 20%를 명당으로 선정 (center 기준)
