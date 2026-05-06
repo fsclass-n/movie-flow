@@ -36,3 +36,7 @@ out/
 ### VS Code ###
 .vscode/
 .env
+
+### RPA 관련 ###
+__pycache__/
+*.pyc

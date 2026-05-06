@@ -16,10 +16,10 @@ WORKDIR /app
 # 빌드 결과물 복사
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# RPA 실행을 위한 Python 및 타임존 설정
+# RPA 실행을 위한 Python, Chromium, ChromeDriver 및 타임존 설정
 ENV TZ=Asia/Seoul
 RUN yum update -y && \
-    yum install -y python3 python3-pip tzdata && \
+    yum install -y python3 python3-pip tzdata chromium && \
     yum clean all
 
 # Python 라이브러리 설치
