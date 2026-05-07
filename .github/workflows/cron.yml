@@ -1,0 +1,47 @@
+name: 4시간 주기 데이터 자동 적재
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # 4시간마다
+  workflow_dispatch:      # 수동 실행 버튼
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 파이썬 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: |
+          python -m pip install --upgrade pip
+          # movie_flow 폴더 안의 requirements.txt 사용
+          pip install -r movie_flow/requirements.txt
+
+      - name: 크롤링 실행
+        # theater_crawler.py를 직접 실행하거나 rpa main 실행
+        run: python movie_flow/rpa/scripts/theater_crawler.py
+
+      - name: 변경된 데이터 저장 (Git Push)
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # 생성된 데이터 파일이 있다면 add (경로는 프로젝트에 맞게 수정)
+          git add . 
+          
+          if git diff --staged --quiet; then
+            echo "변경 사항 없음"
+          else
+            git commit -m "Update crawling data [skip ci]"
+            git push
+          fi
+
+      - name: Render 서버에 적재 명령 호출 (Trigger)
+        # Render의 /load 엔드포인트를 호출하여 DB 업데이트 유도
+        run: curl -X GET "https://movie-flow.onrender.com/load"
