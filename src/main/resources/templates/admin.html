@@ -37,19 +37,19 @@
 
     <main class="container my-5">
         <div class="row mb-4 align-items-stretch">
-            <div class="col-md-4">
+            <div class="col-4 col-md-4">
                 <div class="card-custom p-4 text-center admin-stat-card">
                     <h6 class="text-secondary">활성 봇</h6>
                     <div id="activeBotCount" class="display-5 fw-bold text-primary" th:text="${activeBots != null ? activeBots : 0}">0</div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-4 col-md-4">
                 <div class="card-custom p-4 text-center admin-stat-card">
                     <h6 class="text-secondary">알림 전송 수</h6>
                     <div class="display-5 fw-bold text-success" th:text="${sentCount != null ? sentCount : 0}">0</div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-4 col-md-4">
                 <div class="card-custom p-4 text-center admin-stat-card">
                     <h6 class="text-secondary">한국 시간</h6>
                     <div id="seoulClock" class="h3 fw-bold text-info mb-0" th:text="${currentSeoulTime}">2026-05-01 12:00:00</div>
@@ -95,7 +95,11 @@
 
             function tickSeoulClock() {
                 if (clock) {
-                    clock.textContent = formatter.format(new Date()).replace(' ', ' ');
+                    const formatted = formatter.format(new Date());
+                    const parts = formatted.split(' ');
+                    const dateStr = parts[0] || '';
+                    const timeStr = parts[1] || '';
+                    clock.innerHTML = dateStr + '<br><small style="font-size:0.75em">' + timeStr + '</small>';
                 }
             }
 

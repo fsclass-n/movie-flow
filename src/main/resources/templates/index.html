@@ -21,7 +21,13 @@
 <main class="container my-5">
     <div class="row">
         <div class="col-md-4" th:each="movie : ${movies}">
-            <div class="movie-card p-4" th:classappend="${movie.goodSeats == 0} ? 'opacity-75' : ''" th:attr="data-movie-id=${movie.id}" th:with="isLoading=${initialCrawlStarted}">
+            <div th:class="|movie-card p-4 ${movie.goodSeats == 0 ? 'opacity-75' : ''} ${movie.imageUrl != null and !#strings.isEmpty(movie.imageUrl) ? 'has-image' : ''}|"
+                 th:attr="data-movie-id=${movie.id}"
+                 th:with="isLoading=${initialCrawlStarted}">
+                <div class="movie-card-cover"
+                     th:if="${movie.imageUrl != null and !movie.imageUrl.isBlank()}"
+                     th:style="|background-image: linear-gradient(to bottom, rgba(6, 12, 24, 0.80), rgba(6, 12, 24, 0.80)), url('${movie.imageUrl}')|">
+                </div>
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <span class="badge bg-secondary" th:text="${movie.theaterName}">영화관</span>
                     <span class="text-secondary small" data-role="movie-start-time"

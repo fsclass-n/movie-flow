@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -23,6 +24,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -78,33 +81,34 @@ public class RpaService {
         try {
             log.info("RPA 크롤링 스크립트 실행 시작...");
 
-            ProcessBuilder pb = new ProcessBuilder(pythonCommand, scriptPath);
+            ProcessBuilder pb = new ProcessBuilder(resolvePythonCommand(), scriptPath);
             Map<String, String> env = pb.environment();
             env.put("PYTHONIOENCODING", "UTF-8");
+            env.put("PYTHONDONTWRITEBYTECODE", "1");
 
             Process process = pb.start();
 
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line);
-                }
-            }
+            CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> readProcessStream(process.getInputStream()));
+            CompletableFuture<String> stderrFuture = CompletableFuture.supplyAsync(() -> readProcessStream(process.getErrorStream()));
 
             int exitCode = process.waitFor();
+            String output = stdoutFuture.join();
+            String errorOutput = stderrFuture.join();
             log.info("RPA 스크립트 종료 코드: {}", exitCode);
+            if (!errorOutput.isBlank()) {
+                log.warn("RPA stderr: {}", trimLog(errorOutput));
+            }
 
-            if (exitCode == 0 && output.length() > 0) {
+            String jsonOutput = extractJsonArray(output);
+            if (exitCode == 0 && !jsonOutput.isBlank()) {
                 List<Map<String, Object>> results = objectMapper.readValue(
-                        output.toString(),
+                        jsonOutput,
                         new TypeReference<List<Map<String, Object>>>() {
                         }
                 );
                 updateMovies(results);
             } else {
-                saveLogToDb("RPA 실행 결과가 없거나 오류가 발생했습니다. 코드: " + exitCode, "ERROR");
+                saveLogToDb("RPA 실행 결과가 없거나 오류가 발생했습니다. 코드: " + exitCode + " / 출력: " + trimLog(output) + " / 오류: " + trimLog(errorOutput), "ERROR");
             }
         } catch (IOException | InterruptedException e) {
             saveLogToDb("RPA 예외 발생: " + e.getMessage(), "ERROR");
@@ -116,9 +120,23 @@ public class RpaService {
     @SuppressWarnings("unchecked")
     private void updateMovies(List<Map<String, Object>> results) {
         for (Map<String, Object> data : results) {
+            try {
+                updateMovie(data);
+            } catch (Exception e) {
+                String theaterName = String.valueOf(data.getOrDefault("theater_name", "알 수 없는 영화관"));
+                String message = "영화관 데이터 저장 실패: " + theaterName + " / " + e.getMessage();
+                log.error(message, e);
+                saveLogToDb(message, "ERROR");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void updateMovie(Map<String, Object> data) {
             String title = (String) data.get("title");
             String theaterName = (String) data.get("theater_name");
             String startTime = (String) data.get("start_time");
+            String imageUrl = normalizeImageUrl((String) data.get("image_url"));
             Integer totalSeats = toInteger(data.get("total_seats"), defaultTotalSeats(theaterName));
             List<List<?>> availableSeats = (List<List<?>>) data.get("available_seats");
 
@@ -137,11 +155,21 @@ public class RpaService {
             String updateSql;
             int updatedRows;
             if (failedTitle) {
-                updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
+                if (imageUrl == null) {
+                    updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
+                    updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
+                } else {
+                    updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
+                    updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+                }
             } else {
-                updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
+                if (imageUrl == null) {
+                    updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
+                    updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
+                } else {
+                    updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
+                    updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+                }
             }
 
             String logMsg;
@@ -150,22 +178,21 @@ public class RpaService {
                 logMsg = String.format("업데이트 성공: %s - %s / %s / 명당 %d석", theaterName, title, startTime, computedGoodSeats);
                 logLevel = "INFO";
                 log.info(logMsg);
-
-                // 업데이트된 영화의 ID를 찾고 알림 메일 전송
-                Long movieId = jdbcTemplate.queryForObject("SELECT id FROM movies WHERE theater_name = ?", Long.class, theaterName);
-                if (movieId != null) {
-                    MovieDto movie = movieRepository.findById(movieId);
-                    if (movie != null) {
-                        eventPublisher.publishEvent(new MovieUpdatedEvent(movieId, movie));
-                    }
-                }
             } else {
-                logMsg = String.format("업데이트 대상 없음: %s - %s", theaterName, title);
-                logLevel = "WARN";
-                log.warn(logMsg);
+                insertMovie(title, theaterName, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl);
+                logMsg = String.format("신규 영화관 데이터 생성: %s - %s / %s / 명당 %d석", theaterName, title, startTime, computedGoodSeats);
+                logLevel = "INFO";
+                log.info(logMsg);
+            }
+
+            Long movieId = findMovieIdByTheaterName(theaterName);
+            if (movieId != null) {
+                MovieDto movie = movieRepository.findById(movieId);
+                if (movie != null) {
+                    eventPublisher.publishEvent(new MovieUpdatedEvent(movieId, movie));
+                }
             }
             saveLogToDb(logMsg, logLevel);
-        }
     }
 
     private Integer toInteger(Object value, Integer fallback) {
@@ -176,6 +203,124 @@ public class RpaService {
             return ((Number) value).intValue();
         }
         return fallback;
+    }
+
+    private String readProcessStream(InputStream stream) {
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append(System.lineSeparator());
+            }
+        } catch (IOException e) {
+            log.warn("RPA 프로세스 출력 읽기 실패: {}", e.getMessage());
+        }
+        return output.toString();
+    }
+
+    private String resolvePythonCommand() {
+        String configured = System.getenv("PYTHON_COMMAND");
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        return System.getProperty("os.name", "").toLowerCase().contains("win") ? "python" : "python3";
+    }
+
+    private String extractJsonArray(String output) {
+        if (output == null || output.isBlank()) {
+            return "";
+        }
+
+        for (int start = 0; start < output.length(); start++) {
+            if (output.charAt(start) != '[' || !looksLikeJsonArray(output, start)) {
+                continue;
+            }
+
+            String candidate = readBalancedArray(output, start);
+            if (!candidate.isBlank() && isJsonArray(candidate)) {
+                return candidate;
+            }
+        }
+        return "";
+    }
+
+    private boolean looksLikeJsonArray(String output, int start) {
+        for (int index = start + 1; index < output.length(); index++) {
+            char ch = output.charAt(index);
+            if (!Character.isWhitespace(ch)) {
+                return ch == '{' || ch == ']';
+            }
+        }
+        return false;
+    }
+
+    private String readBalancedArray(String output, int start) {
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (int index = start; index < output.length(); index++) {
+            char ch = output.charAt(index);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (ch == '"') {
+                inString = true;
+            } else if (ch == '[') {
+                depth++;
+            } else if (ch == ']') {
+                depth--;
+                if (depth == 0) {
+                    return output.substring(start, index + 1);
+                }
+            }
+        }
+        return "";
+    }
+
+    private boolean isJsonArray(String candidate) {
+        try {
+            return objectMapper.readTree(candidate).isArray();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String trimLog(String value) {
+        if (value == null) {
+            return "";
+        }
+        String compact = value.lines().limit(8).collect(Collectors.joining(" | "));
+        return compact.length() > 1000 ? compact.substring(0, 1000) : compact;
+    }
+
+    private String normalizeImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+        return imageUrl.trim();
+    }
+
+    private void insertMovie(String title, String theaterName, String startTime, Integer totalSeats,
+                             int goodSeats, String seatsJson, String imageUrl) {
+        String sql = "INSERT INTO movies (title, theater_name, start_time, total_seats, good_seats, image_url, available_seats) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        jdbcTemplate.update(sql, title, theaterName, startTime, totalSeats, goodSeats, imageUrl, seatsJson);
+    }
+
+    private Long findMovieIdByTheaterName(String theaterName) {
+        try {
+            return jdbcTemplate.queryForObject("SELECT id FROM movies WHERE theater_name = ?", Long.class, theaterName);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Integer defaultTotalSeats(String theaterName) {

@@ -3,3 +3,5 @@ python-dotenv
 
 # 웹 크롤링
 beautifulsoup4
+requests
+selenium

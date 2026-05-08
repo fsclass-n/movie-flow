@@ -19,7 +19,10 @@ COPY --from=build /app/build/libs/*.jar app.jar
 # RPA 실행을 위한 Python, 타임존 설정
 ENV TZ=Asia/Seoul
 RUN yum update -y && \
-    yum install -y python3 python3-pip tzdata && \
+    yum install -y python3 python3-pip tzdata wget unzip && \
+    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm && \
+    yum localinstall -y google-chrome-stable_current_x86_64.rpm && \
+    rm -f google-chrome-stable_current_x86_64.rpm && \
     yum clean all && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
@@ -35,6 +38,8 @@ COPY rpa ./rpa
 
 # 메모리 최적화 옵션 (t2.micro 권장)
 ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV PYTHON_COMMAND=python3
+ENV SE_CACHE_PATH=/tmp/selenium
 EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]

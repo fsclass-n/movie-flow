@@ -27,6 +27,7 @@ public class MovieRepository {
             dto.setTotalSeats(rs.getInt("total_seats"));
             dto.setGoodSeats(rs.getInt("good_seats"));
             dto.setAvailableSeats(rs.getString("available_seats"));
+            dto.setImageUrl(rs.getString("image_url"));
             return dto;
         });
     }
@@ -42,6 +43,7 @@ public class MovieRepository {
                 dto.setTotalSeats(rs.getInt("total_seats"));
                 dto.setGoodSeats(rs.getInt("good_seats"));
                 dto.setAvailableSeats(rs.getString("available_seats"));
+                dto.setImageUrl(rs.getString("image_url"));
                 return dto;
             }, id);
         } catch (EmptyResultDataAccessException e) {

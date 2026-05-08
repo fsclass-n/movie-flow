@@ -22,10 +22,11 @@ body {
     background-color: rgba(15, 23, 42, 0.9);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
+    z-index: 1030;
 }
 
 .hero-section {
-    padding: 60px 0;
+    padding: 60px 0 0;
     background: linear-gradient(to bottom, #1e293b, #0f172a);
 }
 
@@ -34,9 +35,34 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 16px;
     transition: transform 0.3s;
+    position: relative;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 .movie-card:hover { transform: translateY(-5px); }
+
+.movie-card-cover {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: saturate(1.05) brightness(0.95);
+}
+
+.movie-card > *:not(.movie-card-cover) {
+    position: relative;
+    z-index: 1;
+}
+
+.movie-card .badge {
+    background-color: rgba(15, 23, 42, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
 
 .rpa-status-dot {
     width: 10px; height: 10px; background-color: #666;
@@ -61,8 +87,22 @@ body {
 .seat-layout {
     display: flex;
     justify-content: center;
-    overflow-x: hidden;
+    overflow-x: auto;
     min-width: 0;
+}
+
+.seat-layout::-webkit-scrollbar {
+    height: 6px;
+}
+
+.seat-layout::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.seat-layout::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
 }
 
 .seat-rows {
@@ -99,7 +139,8 @@ body {
 .seat {
     width: 24px;
     height: 24px;
-    border-radius: 4px;
+    aspect-ratio: 1 / 1;
+    border-radius: 2px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -107,11 +148,13 @@ body {
     font-size: 10px;
     transition: all 0.2s;
     border: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
 }
 
 .lotte-layout .seat {
     width: 20px;
-    height: 22px;
+    height: 20px;
+    aspect-ratio: 1 / 1;
     font-size: 9px;
 }
 
@@ -168,6 +211,210 @@ body {
 .btn-alert:hover { background-color: #be123c; color: white; }
 
 footer { margin-top: auto; padding: 40px 0; background-color: #0b1120; border-top: 1px solid var(--border-color); color: #94a3b8; }
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    .hero-section {
+        padding: 32px 0 0;
+    }
+
+    .hero-section h1 {
+        font-size: 1.75rem !important;
+    }
+
+    .hero-section p {
+        font-size: 0.95rem !important;
+    }
+
+    .navbar .container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .movie-card {
+        padding: 16px !important;
+    }
+
+    .movie-card h3 {
+        font-size: 1.05rem !important;
+    }
+
+    .seat {
+        width: 20px;
+        height: 20px;
+        aspect-ratio: 1 / 1;
+        font-size: 8px;
+        border-radius: 2px;
+    }
+
+    .lotte-layout .seat {
+        width: 18px;
+        height: 18px;
+        aspect-ratio: 1 / 1;
+        font-size: 7px;
+    }
+
+    .seat-label {
+        width: 16px;
+        font-size: 10px;
+    }
+
+    .seat-row {
+        gap: 3px;
+    }
+
+    .lotte-layout .seat-row {
+        gap: 2px;
+    }
+
+    .seat-rows {
+        gap: 4px;
+    }
+
+    .seat-legend {
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .rpa-status {
+        padding: 14px;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .rpa-status-text {
+        font-size: 12px;
+    }
+
+    footer {
+        padding: 24px 0;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    /* 모바일 카드 사이 여백 24px */
+    .movie-card {
+        margin-bottom: 24px;
+    }
+    .col-md-4:last-child .movie-card {
+        margin-bottom: 0 !important;
+    }
+
+    /* 상세 페이지: 좌석 영역과 알림신청 사이 여백 24px */
+    .movie-detail-seat-wrap {
+        padding-bottom: 0 !important;
+        margin-bottom: 24px !important;
+    }
+
+    /* 상세 페이지: 영화관 제목 아래 표시 */
+    .movie-detail-theater {
+        font-size: 0.9rem;
+        margin-bottom: 12px !important;
+    }
+
+    /* 상세 페이지: 좌석 영역 하단 패딩 24px (매진/선택불가 아래 여백) */
+    .movie-detail-seat-wrap .bg-dark {
+        padding-bottom: 24px !important;
+    }
+
+    /* 상세 페이지: 푸터와 알림신청 사이 여백 48px */
+    .movie-detail-alert-form {
+        margin-bottom: 48px !important;
+    }
+
+    /* 관리자 페이지: 3등분 가로 카드 사이 여백 제거 */
+    .row.align-items-stretch .col-md-4 + .col-md-4 {
+        margin-top: 0;
+    }
+
+    /* 관리자 페이지: 로그 한 줄 ellipsis */
+    .terminal-window > div {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 4px;
+    }
+
+    .terminal-window .log-timestamp {
+        display: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .hero-section h1 {
+        font-size: 1.4rem !important;
+    }
+
+    .hero-section p {
+        font-size: 0.85rem !important;
+    }
+
+    .seat {
+        width: 18px;
+        height: 18px;
+        aspect-ratio: 1 / 1;
+        font-size: 7px;
+    }
+
+    .lotte-layout .seat {
+        width: 16px;
+        height: 16px;
+        aspect-ratio: 1 / 1;
+        font-size: 6px;
+    }
+
+    .seat-label {
+        width: 14px;
+        font-size: 9px;
+    }
+
+    .seat-row {
+        gap: 2px;
+    }
+
+    .seat-legend {
+        gap: 8px;
+        font-size: 10px;
+    }
+
+    .legend-seat {
+        width: 12px;
+        height: 12px;
+    }
+
+    .rpa-status-text {
+        font-size: 11px;
+    }
+}
+
+/* 관리자 페이지 모바일 */
+@media (max-width: 767.98px) {
+    .admin-stat-card {
+        min-height: 70px !important;
+        padding: 10px 4px !important;
+    }
+    .admin-stat-card .display-5 {
+        font-size: 1.25rem;
+    }
+    .admin-stat-card h6 {
+        font-size: 0.65rem;
+        margin-bottom: 2px !important;
+        white-space: nowrap;
+    }
+    .admin-stat-card .h3 {
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+    .admin-stat-card small {
+        font-size: 0.7em;
+    }
+    .terminal-window {
+        height: 260px !important;
+        padding: 10px !important;
+    }
+}
 
 /* RPA 상태 애니메이션 */
 .rpa-status {
@@ -231,4 +478,16 @@ footer { margin-top: auto; padding: 40px 0; background-color: #0b1120; border-to
 
 .rpa-status.inactive .rpa-status-text {
     color: #666;
+}
+
+@media (min-width: 992px) {
+    /* 데스크탑: 좌석 컨테이너 하단 여백 24px */
+    .movie-detail-seat-wrap .bg-dark {
+        padding-bottom: 24px !important;
+    }
+
+    /* 데스크탑: 왼쪽 박스(카드) 하단 여백 24px */
+    .movie-detail-seat-wrap {
+        padding-bottom: 24px !important;
+    }
 }
