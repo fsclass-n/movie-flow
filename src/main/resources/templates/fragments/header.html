@@ -68,6 +68,17 @@
 
                 refreshRpaStatus();
                 window.setInterval(refreshRpaStatus, 3000);
+
+                /* 햄버거 메뉴 폴백 토글 (Bootstrap JS 실패 대비) */
+                const toggler = document.querySelector('.navbar-toggler');
+                const navbarNav = document.getElementById('navbarNav');
+                if (toggler && navbarNav) {
+                    toggler.addEventListener('click', () => {
+                        navbarNav.classList.toggle('show');
+                        const expanded = navbarNav.classList.contains('show');
+                        toggler.setAttribute('aria-expanded', String(expanded));
+                    });
+                }
             })();
         </script>
     </nav>

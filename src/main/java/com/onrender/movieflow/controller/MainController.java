@@ -36,6 +36,9 @@ public class MainController {
 
         List<MovieDto> movies = movieRepository.findAll();
         movies.forEach(this::refreshComputedGoodSeats);
+        if (movies.isEmpty()) {
+            movies = defaultLoadingMovies();
+        }
         model.addAttribute("movies", movies);
         return "index";
     }
@@ -171,5 +174,25 @@ public class MainController {
             rows.add(String.valueOf((char) ('A' + index)));
         }
         return rows;
+    }
+
+    private List<MovieDto> defaultLoadingMovies() {
+        return List.of(
+                defaultLoadingMovie(-1L, "CGV 강남", 150),
+                defaultLoadingMovie(-2L, "롯데시네마 건대", 175),
+                defaultLoadingMovie(-3L, "메가박스 코엑스", 150)
+        );
+    }
+
+    private MovieDto defaultLoadingMovie(Long id, String theaterName, int totalSeats) {
+        MovieDto movie = new MovieDto();
+        movie.setId(id);
+        movie.setTheaterName(theaterName);
+        movie.setTitle("상영 정보 확인 중");
+        movie.setStartTime("상영 시간 조회중");
+        movie.setTotalSeats(totalSeats);
+        movie.setGoodSeats(0);
+        movie.setAvailableSeats("[]");
+        return movie;
     }
 }

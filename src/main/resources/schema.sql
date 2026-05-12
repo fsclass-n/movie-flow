@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS movies (
     total_seats INT DEFAULT 0, 
     good_seats INT DEFAULT 0, 
     description TEXT,
-    image_url VARCHAR(255),
+    image_url VARCHAR(1000),
     available_seats TEXT, -- 상세 좌석 정보용 컬럼 필수 추가
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

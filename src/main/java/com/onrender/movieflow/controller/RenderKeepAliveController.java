@@ -25,7 +25,7 @@ public class RenderKeepAliveController {
     private final AtomicInteger pingCount = new AtomicInteger(0);
 
     // [설정] 본인의 Render 서비스 URL + 엔드포인트
-    private final String MY_APP_URL = "https:/localhost:8080/health-check";
+    private final String MY_APP_URL = "https://movie-flow.onrender.com/health-check";
 
     /**
      * 1. 헬스 체크 엔드포인트

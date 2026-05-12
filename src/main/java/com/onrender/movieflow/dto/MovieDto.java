@@ -11,4 +11,5 @@ public class MovieDto {
     private Integer totalSeats;
     private Integer goodSeats;
     private String availableSeats;
+    private String imageUrl;
 }

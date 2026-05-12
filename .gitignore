@@ -39,4 +39,5 @@ out/
 
 ### RPA ###
 __pycache__/
+.selenium-cache/
 
