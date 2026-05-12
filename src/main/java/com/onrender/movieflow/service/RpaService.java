@@ -7,8 +7,11 @@ import com.onrender.movieflow.util.SeatUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -22,9 +25,9 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,25 +49,40 @@ public class RpaService {
         this.movieRepository = movieRepository;
     }
 
+    /**
+     * 서버 기동 완료(포트 8080 오픈) 직후에 실행됩니다.
+     * Render의 Port Scan Timeout 문제를 방지하는 핵심 로직입니다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        log.info("✅ 서버 포트 감지 성공. 최초 RPA 크롤링을 시작합니다.");
+        runInitialCrawlIfNeeded();
+    }
+
     public int getActiveJobCount() {
         return activeJobCount.get();
     }
 
     public boolean runRpaScript() {
         if (activeJobCount.get() > 0) {
+            log.warn("⚠️ 이미 실행 중인 RPA 작업이 있습니다.");
             return false;
         }
-        activeJobCount.incrementAndGet();
-        Thread rpaThread = new Thread(() -> {
-            try {
-                executeRpaScript();
-            } finally {
-                activeJobCount.decrementAndGet();
-            }
-        }, "RpaScriptThread");
-        rpaThread.setDaemon(true);
-        rpaThread.start();
+        executeAsyncRpa();
         return true;
+    }
+
+    @Async // @EnableAsync 설정이 필요합니다.
+    protected void executeAsyncRpa() {
+        if (activeJobCount.incrementAndGet() > 1) {
+            activeJobCount.decrementAndGet();
+            return;
+        }
+        try {
+            executeRpaScript();
+        } finally {
+            activeJobCount.set(0);
+        }
     }
 
     public boolean runInitialCrawlIfNeeded() {
@@ -75,13 +93,13 @@ public class RpaService {
     }
 
     private void executeRpaScript() {
-        String pythonCommand = "python";
         String scriptPath = "rpa/scripts/theater_crawler.py";
+        String pythonCmd = resolvePythonCommand();
 
         try {
-            log.info("RPA 크롤링 스크립트 실행 시작...");
+            log.info("🎬 RPA 스크립트 실행: {} {}", pythonCmd, scriptPath);
 
-            ProcessBuilder pb = new ProcessBuilder(resolvePythonCommand(), scriptPath);
+            ProcessBuilder pb = new ProcessBuilder(pythonCmd, scriptPath);
             Map<String, String> env = pb.environment();
             env.put("PYTHONIOENCODING", "UTF-8");
             env.put("PYTHONDONTWRITEBYTECODE", "1");
@@ -94,26 +112,25 @@ public class RpaService {
             int exitCode = process.waitFor();
             String output = stdoutFuture.join();
             String errorOutput = stderrFuture.join();
-            log.info("RPA 스크립트 종료 코드: {}", exitCode);
+
             if (!errorOutput.isBlank()) {
-                log.warn("RPA stderr: {}", trimLog(errorOutput));
+                log.warn("⚠️ RPA stderr: {}", trimLog(errorOutput));
             }
 
             String jsonOutput = extractJsonArray(output);
             if (exitCode == 0 && !jsonOutput.isBlank()) {
                 List<Map<String, Object>> results = objectMapper.readValue(
                         jsonOutput,
-                        new TypeReference<List<Map<String, Object>>>() {
-                        }
+                        new TypeReference<List<Map<String, Object>>>() {}
                 );
                 updateMovies(results);
             } else {
-                saveLogToDb("RPA 실행 결과가 없거나 오류가 발생했습니다. 코드: " + exitCode + " / 출력: " + trimLog(output) + " / 오류: " + trimLog(errorOutput), "ERROR");
+                saveLogToDb("RPA 결과 없음/오류. ExitCode: " + exitCode, "ERROR");
             }
         } catch (IOException | InterruptedException e) {
-            saveLogToDb("RPA 예외 발생: " + e.getMessage(), "ERROR");
-            log.error("RPA 실행 중 예외 발생", e);
-            Thread.currentThread().interrupt();
+            log.error("❌ RPA 실행 예외 발생", e);
+            saveLogToDb("RPA 예외: " + e.getMessage(), "ERROR");
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
         }
     }
 
@@ -123,190 +140,107 @@ public class RpaService {
             try {
                 updateMovie(data);
             } catch (Exception e) {
-                String theaterName = String.valueOf(data.getOrDefault("theater_name", "알 수 없는 영화관"));
-                String message = "영화관 데이터 저장 실패: " + theaterName + " / " + e.getMessage();
-                log.error(message, e);
-                saveLogToDb(message, "ERROR");
+                log.error("❌ 데이터 업데이트 실패: {}", e.getMessage());
             }
         }
     }
 
     @SuppressWarnings("unchecked")
     private void updateMovie(Map<String, Object> data) {
-            String title = (String) data.get("title");
-            String theaterName = (String) data.get("theater_name");
-            String startTime = (String) data.get("start_time");
-            String imageUrl = normalizeImageUrl((String) data.get("image_url"));
-            Integer totalSeats = toInteger(data.get("total_seats"), defaultTotalSeats(theaterName));
-            List<List<?>> availableSeats = (List<List<?>>) data.get("available_seats");
+        String title = (String) data.get("title");
+        String theaterName = (String) data.get("theater_name");
+        String startTime = (String) data.get("start_time");
+        String imageUrl = normalizeImageUrl((String) data.get("image_url"));
+        
+        // 에러 해결: 안정적인 숫자 변환 로직 적용
+        Integer totalSeats = toInteger(data.get("total_seats"), defaultTotalSeats(theaterName));
+        List<List<?>> availableSeats = (List<List<?>>) data.get("available_seats");
 
-            Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, getSeatsPerRowByTheater(theaterName, totalSeats));
-            int computedGoodSeats = SeatUtils.countPremiumAvailableSeats(availableSeats, premiumSeatIds);
+        Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, getSeatsPerRowByTheater(theaterName, totalSeats));
+        int computedGoodSeats = SeatUtils.countPremiumAvailableSeats(availableSeats, premiumSeatIds);
 
-            String seatsJson;
-            try {
-                seatsJson = objectMapper.writeValueAsString(availableSeats);
-            } catch (Exception e) {
-                seatsJson = "[]";
-                log.error("좌석 데이터 JSON 변환 실패: {}", e.getMessage());
-            }
+        String seatsJson;
+        try {
+            seatsJson = objectMapper.writeValueAsString(availableSeats);
+        } catch (Exception e) {
+            seatsJson = "[]";
+        }
 
-            boolean failedTitle = title != null && title.contains("제목 추출 실패");
-            String updateSql;
-            int updatedRows;
-            if (failedTitle) {
-                if (imageUrl == null) {
-                    updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                    updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
-                } else {
-                    updateSql = "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
-                    updatedRows = jdbcTemplate.update(updateSql, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
-                }
-            } else {
-                if (imageUrl == null) {
-                    updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?";
-                    updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName);
-                } else {
-                    updateSql = "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
-                    updatedRows = jdbcTemplate.update(updateSql, title, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
-                }
-            }
+        boolean failedTitle = title != null && title.contains("제목 추출 실패");
+        int updatedRows;
 
-            String logMsg;
-            String logLevel;
-            if (updatedRows > 0) {
-                logMsg = String.format("업데이트 성공: %s - %s / %s / 명당 %d석", theaterName, title, startTime, computedGoodSeats);
-                logLevel = "INFO";
-                log.info(logMsg);
-            } else {
-                insertMovie(title, theaterName, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl);
-                logMsg = String.format("신규 영화관 데이터 생성: %s - %s / %s / 명당 %d석", theaterName, title, startTime, computedGoodSeats);
-                logLevel = "INFO";
-                log.info(logMsg);
-            }
+        if (failedTitle) {
+            String sql = (imageUrl == null) 
+                ? "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?"
+                : "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
+            updatedRows = (imageUrl == null) 
+                ? jdbcTemplate.update(sql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName)
+                : jdbcTemplate.update(sql, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+        } else {
+            String sql = (imageUrl == null) 
+                ? "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?"
+                : "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
+            updatedRows = (imageUrl == null) 
+                ? jdbcTemplate.update(sql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName)
+                : jdbcTemplate.update(sql, title, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+        }
 
-            Long movieId = findMovieIdByTheaterName(theaterName);
-            if (movieId != null) {
-                MovieDto movie = movieRepository.findById(movieId);
-                if (movie != null) {
-                    eventPublisher.publishEvent(new MovieUpdatedEvent(movieId, movie));
-                }
-            }
-            saveLogToDb(logMsg, logLevel);
+        if (updatedRows == 0) {
+            insertMovie(title, theaterName, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl);
+        }
+
+        log.info("📊 {} 업데이트 완료 (명당: {}석)", theaterName, computedGoodSeats);
+
+        Long movieId = findMovieIdByTheaterName(theaterName);
+        if (movieId != null) {
+            MovieDto movie = movieRepository.findById(movieId);
+            if (movie != null) eventPublisher.publishEvent(new MovieUpdatedEvent(movieId, movie));
+        }
     }
 
+    /**
+     * [에러 수정] 다양한 타입을 안전하게 Integer로 변환합니다.
+     */
     private Integer toInteger(Object value, Integer fallback) {
-        if (value instanceof Integer) {
-            return (Integer) value;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
+        if (value == null) return fallback;
+        try {
+            if (value instanceof Integer) return (Integer) value;
+            if (value instanceof Number) return ((Number) value).intValue();
+            if (value instanceof String) return Integer.parseInt(((String) value).trim());
+        } catch (Exception e) {
+            log.warn("⚠️ 숫자 변환 실패: {} (기본값 {} 사용)", value, fallback);
         }
         return fallback;
     }
 
-    private String readProcessStream(InputStream stream) {
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append(System.lineSeparator());
-            }
-        } catch (IOException e) {
-            log.warn("RPA 프로세스 출력 읽기 실패: {}", e.getMessage());
-        }
-        return output.toString();
+    private String resolvePythonCommand() {
+        String envCmd = System.getenv("PYTHON_COMMAND");
+        if (envCmd != null && !envCmd.isBlank()) return envCmd;
+        return System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
     }
 
-    private String resolvePythonCommand() {
-        String configured = System.getenv("PYTHON_COMMAND");
-        if (configured != null && !configured.isBlank()) {
-            return configured;
+    private String readProcessStream(InputStream stream) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+        } catch (IOException e) {
+            return "";
         }
-        return System.getProperty("os.name", "").toLowerCase().contains("win") ? "python" : "python3";
     }
 
     private String extractJsonArray(String output) {
-        if (output == null || output.isBlank()) {
-            return "";
-        }
-
-        for (int start = 0; start < output.length(); start++) {
-            if (output.charAt(start) != '[' || !looksLikeJsonArray(output, start)) {
-                continue;
-            }
-
-            String candidate = readBalancedArray(output, start);
-            if (!candidate.isBlank() && isJsonArray(candidate)) {
-                return candidate;
-            }
-        }
-        return "";
-    }
-
-    private boolean looksLikeJsonArray(String output, int start) {
-        for (int index = start + 1; index < output.length(); index++) {
-            char ch = output.charAt(index);
-            if (!Character.isWhitespace(ch)) {
-                return ch == '{' || ch == ']';
-            }
-        }
-        return false;
-    }
-
-    private String readBalancedArray(String output, int start) {
-        int depth = 0;
-        boolean inString = false;
-        boolean escaped = false;
-
-        for (int index = start; index < output.length(); index++) {
-            char ch = output.charAt(index);
-            if (inString) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch == '\\') {
-                    escaped = true;
-                } else if (ch == '"') {
-                    inString = false;
-                }
-                continue;
-            }
-
-            if (ch == '"') {
-                inString = true;
-            } else if (ch == '[') {
-                depth++;
-            } else if (ch == ']') {
-                depth--;
-                if (depth == 0) {
-                    return output.substring(start, index + 1);
-                }
-            }
-        }
-        return "";
-    }
-
-    private boolean isJsonArray(String candidate) {
-        try {
-            return objectMapper.readTree(candidate).isArray();
-        } catch (Exception e) {
-            return false;
-        }
+        if (output == null) return "";
+        int start = output.indexOf("[");
+        int end = output.lastIndexOf("]");
+        return (start != -1 && end > start) ? output.substring(start, end + 1) : "";
     }
 
     private String trimLog(String value) {
-        if (value == null) {
-            return "";
-        }
-        String compact = value.lines().limit(8).collect(Collectors.joining(" | "));
-        return compact.length() > 1000 ? compact.substring(0, 1000) : compact;
+        if (value == null) return "";
+        return value.length() > 800 ? value.substring(0, 800) + "..." : value;
     }
 
     private String normalizeImageUrl(String imageUrl) {
-        if (imageUrl == null || imageUrl.isBlank()) {
-            return null;
-        }
-        return imageUrl.trim();
+        return (imageUrl == null || imageUrl.isBlank()) ? null : imageUrl.trim();
     }
 
     private void insertMovie(String title, String theaterName, String startTime, Integer totalSeats,
@@ -324,23 +258,20 @@ public class RpaService {
     }
 
     private Integer defaultTotalSeats(String theaterName) {
-        return theaterName != null && theaterName.contains("롯데") ? 175 : 150;
+        if (theaterName == null) return 150;
+        return theaterName.contains("롯데") ? 175 : 150;
     }
 
     private int getSeatsPerRowByTheater(String theaterName, int totalSeats) {
-        if (totalSeats > 200 || (theaterName != null && theaterName.contains("롯데"))) {
-            return 25;
-        }
-        return 15;
+        return (totalSeats > 200 || (theaterName != null && theaterName.contains("롯데"))) ? 25 : 15;
     }
 
     private void saveLogToDb(String message, String level) {
         try {
             String sql = "INSERT INTO rpa_logs (message, log_level, created_at) VALUES (?, ?, ?)";
-            Timestamp createdAt = Timestamp.valueOf(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
-            jdbcTemplate.update(sql, message, level, createdAt);
+            jdbcTemplate.update(sql, message, level, Timestamp.valueOf(LocalDateTime.now(ZoneId.of("Asia/Seoul"))));
         } catch (Exception e) {
-            log.error("로그 DB 저장 실패 (메시지: {}): {}", message, e.getMessage());
+            log.error("DB 로그 저장 실패");
         }
     }
 }
