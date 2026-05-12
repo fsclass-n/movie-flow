@@ -1,40 +1,40 @@
-# 1단계: 빌드 스테이지
+# --- 1단계: 빌드 스테이지 ---
 FROM gradle:8.5-jdk21 AS build
-COPY --chown=gradle:gradle . /home/gradle/src
-WORKDIR /home/gradle/src
-RUN gradle build --no-daemon -x test
-
-# 2단계: 실행 스테이지
-FROM eclipse-temurin:21-jre-jammy
-
-# 필수 시스템 패키지 및 Python 설치
-# python3-requests와 python3-bs4를 apt로 설치하면 pip 충돌 문제를 완전히 피할 수 있습니다.
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-requests \
-    python3-bs4 \
-    python3-dotenv \
-    fonts-nanum \
-    tzdata \
-    locales \
-    && rm -rf /var/lib/apt/lists/*
-
-# 한국 시간 및 언어 설정
-RUN ln -snf /usr/share/zoneinfo/Asia/Seoul /etc/localtime && echo "Asia/Seoul" > /etc/timezone
-RUN sed -i 's/^# \(ko_KR.UTF-8\)/\1/' /etc/locale.gen && locale-gen
-ENV LANG ko_KR.UTF-8
-ENV LC_ALL ko_KR.UTF-8
-
 WORKDIR /app
 
-# JAR 파일 및 RPA 파일 복사
-COPY --from=build /home/gradle/src/build/libs/*.jar app.jar
-COPY rpa/ /app/rpa/
+# 빌드 속도 향상을 위한 설정 파일 선복사
+COPY build.gradle settings.gradle ./
+COPY src ./src
 
-# Render 환경 포트 설정
+# JAR 파일 생성 (테스트 제외)
+RUN gradle clean build -x test --no-daemon
+
+# --- 2단계: 실행 스테이지 ---
+FROM amazoncorretto:21-al2-full
+WORKDIR /app
+
+# 빌드 결과물 복사
+COPY --from=build /app/build/libs/*.jar app.jar
+
+# RPA 실행을 위한 Python, 타임존 설정
+ENV TZ=Asia/Seoul
+RUN yum update -y && \
+    yum install -y python3 python3-pip tzdata && \
+    yum clean all && \
+    ln -sf /usr/bin/python3 /usr/bin/python
+
+# Python 라이브러리 설치
+COPY requirements.txt* ./
+RUN if [ -f requirements.txt ]; then \
+        pip3 install --no-cache-dir -r requirements.txt; \
+    else \
+        pip3 install python-dotenv beautifulsoup4; \
+    fi
+
+COPY rpa ./rpa
+
+# 메모리 최적화 옵션 (t2.micro 권장)
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
 EXPOSE 8080
 
-# 실행 명령어
-ENV PYTHON_COMMAND=python3
-ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
