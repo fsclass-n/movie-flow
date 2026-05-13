@@ -3,7 +3,6 @@ package com.onrender.movieflow.service;
 import com.onrender.movieflow.dto.MovieDto;
 import com.onrender.movieflow.event.MovieUpdatedEvent;
 import com.onrender.movieflow.repository.MovieRepository;
-import com.onrender.movieflow.util.SeatUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +23,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,7 +91,7 @@ public class RpaService {
     }
 
     private void executeRpaScript() {
-        String scriptPath = "rpa/scripts/theater_crawler.py";
+        String scriptPath = "rpa/main.py";
         String pythonCmd = resolvePythonCommand();
 
         try {
@@ -134,7 +132,6 @@ public class RpaService {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void updateMovies(List<Map<String, Object>> results) {
         for (Map<String, Object> data : results) {
             try {
@@ -155,9 +152,9 @@ public class RpaService {
         // 에러 해결: 안정적인 숫자 변환 로직 적용
         Integer totalSeats = toInteger(data.get("total_seats"), defaultTotalSeats(theaterName));
         List<List<?>> availableSeats = (List<List<?>>) data.get("available_seats");
-
-        Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, getSeatsPerRowByTheater(theaterName, totalSeats));
-        int computedGoodSeats = SeatUtils.countPremiumAvailableSeats(availableSeats, premiumSeatIds);
+        
+        // Python에서 계산한 good_seats 값 사용
+        Integer goodSeats = toInteger(data.get("good_seats"), 0);
 
         String seatsJson;
         try {
@@ -174,22 +171,22 @@ public class RpaService {
                 ? "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?"
                 : "UPDATE movies SET start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
             updatedRows = (imageUrl == null) 
-                ? jdbcTemplate.update(sql, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName)
-                : jdbcTemplate.update(sql, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+                ? jdbcTemplate.update(sql, startTime, totalSeats, goodSeats, seatsJson, theaterName)
+                : jdbcTemplate.update(sql, startTime, totalSeats, goodSeats, seatsJson, imageUrl, theaterName);
         } else {
             String sql = (imageUrl == null) 
                 ? "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ? WHERE theater_name = ?"
                 : "UPDATE movies SET title = ?, start_time = ?, total_seats = ?, good_seats = ?, available_seats = ?, image_url = ? WHERE theater_name = ?";
             updatedRows = (imageUrl == null) 
-                ? jdbcTemplate.update(sql, title, startTime, totalSeats, computedGoodSeats, seatsJson, theaterName)
-                : jdbcTemplate.update(sql, title, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl, theaterName);
+                ? jdbcTemplate.update(sql, title, startTime, totalSeats, goodSeats, seatsJson, theaterName)
+                : jdbcTemplate.update(sql, title, startTime, totalSeats, goodSeats, seatsJson, imageUrl, theaterName);
         }
 
         if (updatedRows == 0) {
-            insertMovie(title, theaterName, startTime, totalSeats, computedGoodSeats, seatsJson, imageUrl);
+            insertMovie(title, theaterName, startTime, totalSeats, goodSeats, seatsJson, imageUrl);
         }
 
-        log.info("📊 {} 업데이트 완료 (명당: {}석)", theaterName, computedGoodSeats);
+        log.info("📊 {} 업데이트 완료 (명당: {}석)", theaterName, goodSeats);
 
         Long movieId = findMovieIdByTheaterName(theaterName);
         if (movieId != null) {

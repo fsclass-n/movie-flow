@@ -35,7 +35,6 @@ public class MainController {
         model.addAttribute("initialCrawlStarted", initialCrawlStarted);
 
         List<MovieDto> movies = movieRepository.findAll();
-        movies.forEach(this::refreshComputedGoodSeats);
         if (movies.isEmpty()) {
             movies = defaultLoadingMovies();
         }
@@ -47,7 +46,6 @@ public class MainController {
     @ResponseBody
     public List<MovieDto> fetchMovies() {
         List<MovieDto> movies = movieRepository.findAll();
-        movies.forEach(this::refreshComputedGoodSeats);
         return movies;
     }
 
@@ -124,32 +122,6 @@ public class MainController {
     }
 
     // --- Private Helper Methods (동작 유지) ---
-
-    private void refreshComputedGoodSeats(MovieDto movie) {
-        if (movie == null) return;
-        int totalSeats = getTotalSeats(movie);
-        int seatsPerRow = getSeatsPerRow(movie, totalSeats);
-        Set<String> premiumSeatIds = SeatUtils.computePremiumSeatIds(totalSeats, seatsPerRow);
-        List<String> availableSeatIds = parseAvailableSeatIds(movie.getAvailableSeats());
-        int computedGoodSeats = (int) availableSeatIds.stream().filter(premiumSeatIds::contains).count();
-        movie.setGoodSeats(computedGoodSeats);
-    }
-
-    private List<String> parseAvailableSeatIds(String availableSeatsJson) {
-        if (availableSeatsJson == null || availableSeatsJson.isBlank()) return List.of();
-        try {
-            List<List<?>> seats = objectMapper.readValue(availableSeatsJson, new TypeReference<List<List<?>>>() {});
-            List<String> seatIds = new ArrayList<>();
-            for (List<?> seat : seats) {
-                if (seat.size() == 2) {
-                    seatIds.add(seat.get(0).toString() + seat.get(1).toString());
-                }
-            }
-            return seatIds;
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
 
     private boolean isLotteTheater(MovieDto movie) {
         return movie != null && movie.getTheaterName() != null && movie.getTheaterName().contains("롯데");
