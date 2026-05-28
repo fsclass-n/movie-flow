@@ -16,10 +16,13 @@ jobs:
         env:
           WAKE_UP_URL: ${{ secrets.WAKE_UP_URL }}
         run: |
+          # 시크릿 변수 누출 방지를 위해 에러 메시지에서 변수 출력을 제외했습니다.
           if [ -z "$WAKE_UP_URL" ]; then
-            echo "⚠️ Warning: WAKE_UP_URL secret is not set. Skipping ping."
+            echo "⚠️ Warning: Target URL secret is not set. Skipping ping."
             echo "Please configure WAKE_UP_URL in your GitHub repository secrets."
             exit 0
           fi
+          
           echo "Pinging Web Service..."
-          curl -sL -w " -> HTTP %{http_code}\n" "$WAKE_UP_URL" -o /dev/null
+          # -I (HEAD 요청) 옵션을 추가하여 데이터 패킷을 최소화하고 효율적으로 서버를 깨웁니다.
+          curl -sIL -w " -> HTTP %{http_code}\n" "$WAKE_UP_URL" -o /dev/null
