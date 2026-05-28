@@ -259,10 +259,6 @@ public class RpaService {
         return theaterName.contains("롯데") ? 175 : 150;
     }
 
-    private int getSeatsPerRowByTheater(String theaterName, int totalSeats) {
-        return (totalSeats > 200 || (theaterName != null && theaterName.contains("롯데"))) ? 25 : 15;
-    }
-
     private void saveLogToDb(String message, String level) {
         try {
             String sql = "INSERT INTO rpa_logs (message, log_level, created_at) VALUES (?, ?, ?)";
