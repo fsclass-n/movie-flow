@@ -26,8 +26,8 @@ def send_email(recipient, subject, body):
     msg.set_content(body)
 
     try:
-        # SMTP_PORT가 문자열로 넘어올 경우를 대비해 int 변환
-        with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT)) as smtp:
+        # SMTP_PORT가 문자열로 넘어올 경우를 대비해 int 변환. 타임아웃 10초 설정
+        with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT), timeout=10) as smtp:
             smtp.ehlo()
             smtp.starttls()
             # 로그인 시도

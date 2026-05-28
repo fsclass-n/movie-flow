@@ -105,6 +105,11 @@
 
             tickSeoulClock();
             window.setInterval(tickSeoulClock, 1000);
+
+            // 데이터 자동 갱신을 위해 5초마다 페이지 새로고침
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
         })();
     </script>
 

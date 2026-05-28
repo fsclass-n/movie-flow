@@ -79,43 +79,45 @@ public class AlertService {
      * [핵심] 외부 파이썬 스크립트(send.py) 실행
      */
     private void executePythonSendMail(String recipient, String subject, String body) {
-        try {
-            log.info("파이썬 메일러 호출: {}", recipient);
-
-            // 운영체제 확인 (윈도우는 python, 리눅스/맥은 python3 인 경우가 많음)
-            String pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
-
-            // ProcessBuilder 구성 (인자 전달: 수신자, 제목, 본문)
-            ProcessBuilder pb = new ProcessBuilder(
-                    pythonCmd, 
-                    "rpa/scripts/send.py", // 파일 경로가 프로젝트 루트 기준인지 확인 필수
-                    recipient, 
-                    subject, 
-                    body
-            );
-            
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            // 파이썬의 print() 출력을 자바 로그에 기록 (인코딩 UTF-8 명시)
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    log.info("[Python] {}", line);
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                log.info("파이썬 메일러 호출: {}", recipient);
+    
+                // 운영체제 확인 (윈도우는 python, 리눅스/맥은 python3 인 경우가 많음)
+                String pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? "python" : "python3";
+    
+                // ProcessBuilder 구성 (인자 전달: 수신자, 제목, 본문)
+                ProcessBuilder pb = new ProcessBuilder(
+                        pythonCmd, 
+                        "rpa/scripts/send.py", // 파일 경로가 프로젝트 루트 기준인지 확인 필수
+                        recipient, 
+                        subject, 
+                        body
+                );
+                
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+    
+                // 파이썬의 print() 출력을 자바 로그에 기록 (인코딩 UTF-8 명시)
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        log.info("[Python] {}", line);
+                    }
                 }
+    
+                int exitCode = process.waitFor();
+                if (exitCode == 0) {
+                    log.info("메일 전송 프로세스 종료 성공");
+                } else {
+                    log.error("메일 전송 프로세스 종료 실패 (Exit Code: {})", exitCode);
+                }
+    
+            } catch (Exception e) {
+                log.error("파이썬 실행 중 예외 발생: {}", e.getMessage());
             }
-
-            int exitCode = process.waitFor();
-            if (exitCode == 0) {
-                log.info("메일 전송 프로세스 종료 성공");
-            } else {
-                log.error("메일 전송 프로세스 종료 실패 (Exit Code: {})", exitCode);
-            }
-
-        } catch (Exception e) {
-            log.error("파이썬 실행 중 예외 발생: {}", e.getMessage());
-        }
+        });
     }
 
     public void deleteAlert(Long id) {
