@@ -30,9 +30,9 @@ jobs:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "❌ Error: RENDER_DEPLOY_HOOK secret is not set!"
-            echo "Please set RENDER_DEPLOY_HOOK in your GitHub repository secrets."
-            exit 1
+            echo "⚠️ Warning: RENDER_DEPLOY_HOOK secret is not set. Skipping deploy hook trigger."
+            echo "Since your Render service is linked to GitHub, it will deploy automatically on push."
+            exit 0
           fi
           echo "🚀 Triggering Render deployment..."
           curl -f -X POST "$RENDER_DEPLOY_HOOK"
