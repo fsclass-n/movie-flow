@@ -19,17 +19,21 @@ COPY --from=build /app/build/libs/*.jar app.jar
 # RPA 실행을 위한 Python, 타임존 설정
 ENV TZ=Asia/Seoul
 RUN yum update -y && \
-    yum install -y python3 python3-pip tzdata && \
+    yum install -y python3 python3-pip tzdata \
+    atk at-spi2-atk cups-libs libdrm libxcb libxkbcommon at-spi2-core \
+    libX11 libXcomposite libXdamage libXext libXfixes libXrandr mesa-libgbm pango cairo alsa-lib \
+    libXcursor libXi libXtst libXScrnSaver gtk3 nss xorg-x11-server-Xvfb && \
     yum clean all && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
-# Python 라이브러리 설치
+# Python 라이브러리 및 브라우저 설치
 COPY requirements.txt* ./
 RUN if [ -f requirements.txt ]; then \
         pip3 install --no-cache-dir -r requirements.txt; \
     else \
-        pip3 install python-dotenv beautifulsoup4; \
-    fi
+        pip3 install python-dotenv beautifulsoup4 playwright; \
+    fi && \
+    playwright install chromium
 
 COPY rpa ./rpa
 
