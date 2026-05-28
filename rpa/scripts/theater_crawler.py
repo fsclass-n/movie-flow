@@ -98,6 +98,7 @@ def fallback_schedule(theater):
     }
 
 def crawl_theater_data():
+    import requests
     theaters = [
         {"name": "롯데시네마 건대", "crawler": "lotte", "cinema_id": "1|0001|1004"},
         {"name": "메가박스 코엑스", "crawler": "megabox", "brch_no": "1351"},
@@ -106,137 +107,128 @@ def crawl_theater_data():
     
     results = []
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--disable-blink-features=AutomationControlled"]
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-
-        for theater in theaters:
-            schedule = None
-            try:
-                if theater["crawler"] == "lotte":
-                    log_stderr(f"Crawling Lotte: {theater['name']}...")
-                    page.goto("https://www.lottecinema.co.kr/NLCHS/Ticketing", timeout=30000)
-                    page.wait_for_timeout(1000)
+    for theater in theaters:
+        schedule = None
+        try:
+            if theater["crawler"] == "lotte":
+                log_stderr(f"Crawling Lotte: {theater['name']}...")
+                schedules = []
+                today = datetime.now()
+                for offset in range(3):
+                    play_date = (today + timedelta(days=offset)).strftime("%Y-%m-%d")
+                    payload = {
+                        "MethodName": "GetPlaySequence",
+                        "channelType": "HO",
+                        "osType": "W",
+                        "osVersion": "Mozilla/5.0",
+                        "playDate": play_date,
+                        "cinemaID": theater["cinema_id"],
+                        "representationMovieCode": ""
+                    }
                     
-                    schedules = []
-                    today = datetime.now()
-                    for offset in range(3):
-                        play_date = (today + timedelta(days=offset)).strftime("%Y-%m-%d")
-                        payload = {
-                            "MethodName": "GetPlaySequence",
-                            "channelType": "HO",
-                            "osType": "W",
-                            "osVersion": "Mozilla/5.0",
-                            "playDate": play_date,
-                            "cinemaID": theater["cinema_id"],
-                            "representationMovieCode": ""
-                        }
-                        
-                        data = page.evaluate("""async (args) => {
-                            const response = await fetch("https://www.lottecinema.co.kr/LCWS/Ticketing/TicketingData.aspx", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-                                },
-                                body: "paramList=" + encodeURIComponent(JSON.stringify(args.payload))
-                            });
-                            return response.json();
-                        }""", {"payload": payload})
-                        
-                        items = data.get("PlaySeqs", {}).get("Items", [])
-                        for item in items:
-                            t_seats = to_int(item.get("TotalSeatCount"))
-                            poster_url = item.get('PosterURL', '')
-                            if poster_url.startswith("http"):
-                                img_url = poster_url
-                            else:
-                                img_url = f"https://cdn.lottecinema.co.kr/{poster_url}" if poster_url else ""
-                                
-                            schedules.append(build_schedule(
-                                theater["name"],
-                                item.get("MovieNameKR", ""),
-                                item.get("PlayDt", play_date),
-                                item.get("StartTime", ""),
-                                t_seats - to_int(item.get("BookingSeatCount")),
-                                t_seats,
-                                to_int(item.get("BookingSortSequence", 999)),
-                                img_url
-                            ))
-                        # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
-                        now_threshold = datetime.now() - timedelta(minutes=10)
-                        valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
-                        if valid_today:
-                            break
-                    schedule = choose_best_schedule(schedules)
+                    res = requests.post(
+                        "https://www.lottecinema.co.kr/LCWS/Ticketing/TicketingData.aspx", 
+                        data={"paramList": json.dumps(payload)},
+                        headers={"User-Agent": "Mozilla/5.0"}
+                    )
+                    data = res.json()
                     
-                elif theater["crawler"] == "megabox":
-                    log_stderr(f"Crawling Megabox: {theater['name']}...")
-                    page.goto("https://www.megabox.co.kr/booking/timetable", timeout=30000)
-                    page.wait_for_timeout(1000)
+                    items = data.get("PlaySeqs", {}).get("Items", [])
+                    for item in items:
+                        t_seats = to_int(item.get("TotalSeatCount"))
+                        poster_url = item.get('PosterURL', '')
+                        if poster_url.startswith("http"):
+                            img_url = poster_url
+                        else:
+                            img_url = f"https://cdn.lottecinema.co.kr/{poster_url}" if poster_url else ""
+                            
+                        schedules.append(build_schedule(
+                            theater["name"],
+                            item.get("MovieNameKR", ""),
+                            item.get("PlayDt", play_date),
+                            item.get("StartTime", ""),
+                            t_seats - to_int(item.get("BookingSeatCount")),
+                            t_seats,
+                            to_int(item.get("BookingSortSequence", 999)),
+                            img_url
+                        ))
+                    # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
+                    now_threshold = datetime.now() - timedelta(minutes=10)
+                    valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
+                    if valid_today:
+                        break
+                schedule = choose_best_schedule(schedules)
+                
+            elif theater["crawler"] == "megabox":
+                log_stderr(f"Crawling Megabox: {theater['name']}...")
+                schedules = []
+                today = datetime.now()
+                for offset in range(3):
+                    play_date = (today + timedelta(days=offset)).strftime("%Y%m%d")
+                    payload = {
+                        "masterType": "brch",
+                        "detailType": "area",
+                        "brchNo": theater["brch_no"],
+                        "playDe": play_date
+                    }
                     
-                    schedules = []
-                    today = datetime.now()
-                    for offset in range(3):
-                        play_date = (today + timedelta(days=offset)).strftime("%Y%m%d")
-                        payload = {
-                            "masterType": "brch",
-                            "detailType": "area",
-                            "brchNo": theater["brch_no"],
-                            "playDe": play_date
-                        }
-                        
-                        data = page.evaluate("""async (args) => {
-                            const response = await fetch("https://www.megabox.co.kr/on/oh/ohc/Brch/schedulePage.do", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json;charset=UTF-8"
-                                },
-                                body: JSON.stringify(args.payload)
-                            });
-                            return response.json();
-                        }""", {"payload": payload})
-                        
-                        items = data.get("megaMap", {}).get("movieFormList", [])
-                        for item in items:
-                            schedules.append(build_schedule(
-                                theater["name"],
-                                item.get("movieNm", ""),
-                                item.get("playDe", play_date),
-                                item.get("playStartTime", ""),
-                                item.get("restSeatCnt"),
-                                item.get("totSeatCnt"),
-                                to_int(item.get("boxoRank", 999)),
-                                f"https://file.megabox.co.kr{item.get('posterPath')}" if item.get('posterPath') else ""
-                            ))
-                        # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
-                        now_threshold = datetime.now() - timedelta(minutes=10)
-                        valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
-                        if valid_today:
-                            break
-                    schedule = choose_best_schedule(schedules)
+                    res = requests.post(
+                        "https://www.megabox.co.kr/on/oh/ohc/Brch/schedulePage.do",
+                        json=payload,
+                        headers={"User-Agent": "Mozilla/5.0"}
+                    )
+                    data = res.json()
                     
-                elif theater["crawler"] == "cgv":
-                    log_stderr(f"Crawling CGV: {theater['name']}...")
+                    items = data.get("megaMap", {}).get("movieFormList", [])
+                    for item in items:
+                        schedules.append(build_schedule(
+                            theater["name"],
+                            item.get("movieNm", ""),
+                            item.get("playDe", play_date),
+                            item.get("playStartTime", ""),
+                            item.get("restSeatCnt"),
+                            item.get("totSeatCnt"),
+                            to_int(item.get("boxoRank", 999)),
+                            f"https://file.megabox.co.kr{item.get('posterPath')}" if item.get('posterPath') else ""
+                        ))
+                    # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
+                    now_threshold = datetime.now() - timedelta(minutes=10)
+                    valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
+                    if valid_today:
+                        break
+                schedule = choose_best_schedule(schedules)
+                
+            elif theater["crawler"] == "cgv":
+                log_stderr(f"Crawling CGV: {theater['name']}...")
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(
+                        headless=True,
+                        args=["--disable-blink-features=AutomationControlled"]
+                    )
+                    context = browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    )
+                    page = context.new_page()
+                    
                     new_code = f"{theater['theater_code']}001"
                     url = f"https://cgv.co.kr/cnm/bzplcCgv/{new_code}"
-                    page.goto(url, timeout=30000)
+                    
+                    try:
+                        page.goto(url, timeout=60000)
+                        page.wait_for_load_state("networkidle", timeout=10000)
+                    except:
+                        pass
                     
                     tab = page.locator("text='상영시간표'").first
                     try:
-                        tab.wait_for(state="visible", timeout=4000)
+                        tab.wait_for(state="visible", timeout=10000)
                     except:
                         pass
                         
                     if tab.is_visible():
                         tab.click()
                         try:
-                            page.wait_for_selector(".accordion_container__W7nEs", timeout=4000)
+                            page.wait_for_selector(".accordion_container__W7nEs", timeout=10000)
                         except:
                             pass
                         
@@ -291,32 +283,32 @@ def crawl_theater_data():
                     else:
                         log_stderr("상영시간표 tab not found!")
                         
-            except Exception as e:
-                log_stderr(f"Error crawling {theater['name']}: {e}")
-                
-            if not schedule:
-                log_stderr(f"Using fallback for {theater['name']}")
-                schedule = fallback_schedule(theater)
-                
-            available_seats = build_available_seats(theater["name"], schedule["remaining_seats"], schedule["total_seats"])
-            rows, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
+                    browser.close()
+                        
+        except Exception as e:
+            log_stderr(f"Error crawling {theater['name']}: {e}")
             
-            premium_seats = get_premium_seats(len(rows), seats_per_row)
-            good_seats_count = calculate_good_seats(available_seats, premium_seats)
+        if not schedule:
+            log_stderr(f"Using fallback for {theater['name']}")
+            schedule = fallback_schedule(theater)
             
-            results.append({
-                "theater_name": theater["name"],
-                "title": schedule["title"],
-                "start_time": f"{schedule['showing_date']} {schedule['showing_time']}",
-                "remaining_seats": schedule["remaining_seats"],
-                "total_seats": schedule["total_seats"],
-                "good_seats": good_seats_count,
-                "available_seats": available_seats,
-                "image_url": schedule.get("image_url", ""),
-                "crawled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            })
-            
-        browser.close()
+        available_seats = build_available_seats(theater["name"], schedule["remaining_seats"], schedule["total_seats"])
+        rows, seats_per_row = get_seat_layout(theater["name"], schedule["total_seats"])
+        
+        premium_seats = get_premium_seats(len(rows), seats_per_row)
+        good_seats_count = calculate_good_seats(available_seats, premium_seats)
+        
+        results.append({
+            "theater_name": theater["name"],
+            "title": schedule["title"],
+            "start_time": f"{schedule['showing_date']} {schedule['showing_time']}",
+            "remaining_seats": schedule["remaining_seats"],
+            "total_seats": schedule["total_seats"],
+            "good_seats": good_seats_count,
+            "available_seats": available_seats,
+            "image_url": schedule.get("image_url", ""),
+            "crawled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
         
     print(json.dumps(results, ensure_ascii=False))
 
