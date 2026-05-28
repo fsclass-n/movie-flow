@@ -15,23 +15,31 @@ services:
         value: 8080
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      
+      # TiDB Database Connection Settings (Render 대시보드에서 직접 입력하거나 환경 변수 주입)
       - key: SPRING_DATASOURCE_URL
-        fromService:
-          name: movie-flow-db
-          property: connection_string
+        sync: false
       - key: SPRING_DATASOURCE_USERNAME
-        fromService:
-          name: movie-flow-db
-          property: username
+        sync: false
       - key: SPRING_DATASOURCE_PASSWORD
-        fromService:
-          name: movie-flow-db
-          property: password
-    
+        sync: false
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: com.mysql.cj.jdbc.Driver
+
+      # Mail Server Settings
+      - key: SPRING_MAIL_HOST
+        value: smtp.gmail.com
+      - key: SPRING_MAIL_PORT
+        value: "587"
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+
     # 빌드 명령
     buildCommand: chmod +x gradlew && ./gradlew clean build -x test --no-daemon
     
-    # 헬스 체크
+    # 헬스 체크 (Render에서 서비스 상태 확인 경로)
     healthCheckPath: /
     healthCheckInterval: 30
     healthCheckStartupFailureThresholdCount: 3
@@ -41,9 +49,5 @@ services:
       - port: 8080
         protocol: HTTP
     
-    # 자동 배포
-    autoDeploy: true
-
-databases:
-  - name: movie-flow-db
-    ipAllowList: []
+    # GitHub Actions로만 빌드 성공 시 배포를 제어하기 위해 autoDeploy는 false로 설정
+    autoDeploy: false
