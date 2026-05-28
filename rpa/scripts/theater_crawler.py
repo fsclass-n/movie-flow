@@ -129,7 +129,8 @@ def crawl_theater_data():
                     res = requests.post(
                         "https://www.lottecinema.co.kr/LCWS/Ticketing/TicketingData.aspx", 
                         data={"paramList": json.dumps(payload)},
-                        headers={"User-Agent": "Mozilla/5.0"}
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=15
                     )
                     data = res.json()
                     
@@ -175,7 +176,8 @@ def crawl_theater_data():
                     res = requests.post(
                         "https://www.megabox.co.kr/on/oh/ohc/Brch/schedulePage.do",
                         json=payload,
-                        headers={"User-Agent": "Mozilla/5.0"}
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=15
                     )
                     data = res.json()
                     
@@ -203,7 +205,7 @@ def crawl_theater_data():
                 with sync_playwright() as p:
                     browser = p.chromium.launch(
                         headless=True,
-                        args=["--disable-blink-features=AutomationControlled"]
+                        args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
                     )
                     context = browser.new_context(
                         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"

@@ -10,7 +10,7 @@ services:
     # 환경 변수 설정
     envVars:
       - key: JAVA_OPTS
-        value: -Xmx512m -Xms256m
+        value: -Xmx256m -Xms128m
       - key: SERVER_PORT
         value: 8080
       - key: SPRING_PROFILES_ACTIVE

@@ -38,7 +38,7 @@ RUN if [ -f requirements.txt ]; then \
 COPY rpa ./rpa
 
 # 메모리 최적화 옵션 (t2.micro 권장)
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV JAVA_OPTS="-Xmx256m -Xms128m"
 EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
