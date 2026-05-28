@@ -1,0 +1,25 @@
+name: Wake Up Render Service
+
+on:
+  schedule:
+    # 렌더의 슬립 모드(15분 미요청 시 중지)를 예방하기 위해 12분 간격으로 HTTP 호출을 보냅니다.
+    # 단일 서비스(recipekr)만 가동하므로 24시간 상시 가동(월 720시간 소모)이 무료 범위(750시간) 내에 완전히 들어옵니다.
+    - cron: '*/12 * * * *'
+  
+  workflow_dispatch: # 필요 시 깃허브 액션 탭에서 수동으로도 트리거 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Web Service
+        env:
+          WAKE_UP_URL: ${{ secrets.WAKE_UP_URL }}
+        run: |
+          if [ -z "$WAKE_UP_URL" ]; then
+            echo "⚠️ Warning: WAKE_UP_URL secret is not set. Skipping ping."
+            echo "Please configure WAKE_UP_URL in your GitHub repository secrets."
+            exit 0
+          fi
+          echo "Pinging Web Service..."
+          curl -sL -w " -> HTTP %{http_code}\n" "$WAKE_UP_URL" -o /dev/null
