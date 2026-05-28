@@ -10,7 +10,7 @@ COPY src ./src
 RUN gradle clean build -x test --no-daemon
 
 # --- 2단계: 실행 스테이지 ---
-FROM amazoncorretto:21-al2-full
+FROM amazoncorretto:21-al2023
 WORKDIR /app
 
 # 빌드 결과물 복사
@@ -22,7 +22,7 @@ RUN yum update -y && \
     yum install -y python3 python3-pip tzdata \
     atk at-spi2-atk cups-libs libdrm libxcb libxkbcommon at-spi2-core \
     libX11 libXcomposite libXdamage libXext libXfixes libXrandr mesa-libgbm pango cairo alsa-lib \
-    libXcursor libXi libXtst libXScrnSaver gtk3 nss xorg-x11-server-Xvfb && \
+    libXcursor libXi libXtst nss nspr libxshmfence fontconfig && \
     yum clean all && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
