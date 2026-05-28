@@ -122,7 +122,7 @@ def crawl_theater_data():
                 if theater["crawler"] == "lotte":
                     log_stderr(f"Crawling Lotte: {theater['name']}...")
                     page.goto("https://www.lottecinema.co.kr/NLCHS/Ticketing", timeout=30000)
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(1000)
                     
                     schedules = []
                     today = datetime.now()
@@ -168,12 +168,17 @@ def crawl_theater_data():
                                 to_int(item.get("BookingSortSequence", 999)),
                                 img_url
                             ))
+                        # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
+                        now_threshold = datetime.now() - timedelta(minutes=10)
+                        valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
+                        if valid_today:
+                            break
                     schedule = choose_best_schedule(schedules)
                     
                 elif theater["crawler"] == "megabox":
                     log_stderr(f"Crawling Megabox: {theater['name']}...")
                     page.goto("https://www.megabox.co.kr/booking/timetable", timeout=30000)
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(1000)
                     
                     schedules = []
                     today = datetime.now()
@@ -209,6 +214,11 @@ def crawl_theater_data():
                                 to_int(item.get("boxoRank", 999)),
                                 f"https://file.megabox.co.kr{item.get('posterPath')}" if item.get('posterPath') else ""
                             ))
+                        # 오늘자 상영 정보 중 유효한 미래 상영 일정이 존재하면 내일/모레 일정 조회 생략
+                        now_threshold = datetime.now() - timedelta(minutes=10)
+                        valid_today = [s for s in schedules if s["start_dt"] >= now_threshold and s["remaining_seats"] > 0]
+                        if valid_today:
+                            break
                     schedule = choose_best_schedule(schedules)
                     
                 elif theater["crawler"] == "cgv":
@@ -216,12 +226,19 @@ def crawl_theater_data():
                     new_code = f"{theater['theater_code']}001"
                     url = f"https://cgv.co.kr/cnm/bzplcCgv/{new_code}"
                     page.goto(url, timeout=30000)
-                    page.wait_for_timeout(3000)
                     
                     tab = page.locator("text='상영시간표'").first
+                    try:
+                        tab.wait_for(state="visible", timeout=4000)
+                    except:
+                        pass
+                        
                     if tab.is_visible():
                         tab.click()
-                        page.wait_for_timeout(3000)
+                        try:
+                            page.wait_for_selector(".accordion_container__W7nEs", timeout=4000)
+                        except:
+                            pass
                         
                         html_text = page.locator("body").inner_html()
                         soup = BeautifulSoup(html_text, "html.parser")

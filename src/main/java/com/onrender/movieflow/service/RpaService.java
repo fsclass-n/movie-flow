@@ -66,21 +66,18 @@ public class RpaService {
             log.warn("⚠️ 이미 실행 중인 RPA 작업이 있습니다.");
             return false;
         }
-        executeAsyncRpa();
+        new Thread(() -> {
+            if (activeJobCount.incrementAndGet() > 1) {
+                activeJobCount.decrementAndGet();
+                return;
+            }
+            try {
+                executeRpaScript();
+            } finally {
+                activeJobCount.set(0);
+            }
+        }, "RPA-Thread").start();
         return true;
-    }
-
-    @Async // @EnableAsync 설정이 필요합니다.
-    protected void executeAsyncRpa() {
-        if (activeJobCount.incrementAndGet() > 1) {
-            activeJobCount.decrementAndGet();
-            return;
-        }
-        try {
-            executeRpaScript();
-        } finally {
-            activeJobCount.set(0);
-        }
     }
 
     public boolean runInitialCrawlIfNeeded() {
